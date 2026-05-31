@@ -137,6 +137,15 @@
 
   /* Conta / configurações */
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .top-actions { display: flex; align-items: center; gap: 8px; }
+  .acct-btn:disabled { opacity: 0.6; cursor: default; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 9px;
+    font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 80;
+    max-width: 80%; text-align: center;
+  }
+  .toast.show { opacity: 0.96; }
   .acct-btn {
     font-family: var(--sans); font-size: 12.5px; color: var(--fg-secondary);
     background: transparent; border: 0.5px solid var(--btn-border); border-radius: 999px;
@@ -208,7 +217,10 @@
   <header>
     <div class="topbar">
       <div class="wordmark">Clípeo</div>
-      <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
+      <div class="top-actions">
+        <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
+        <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
+      </div>
     </div>
     <div class="meta">
       <span id="today"></span>
@@ -226,6 +238,8 @@
 <div class="overlay" id="overlay" onclick="if (event.target === this) closeSettings()">
   <div class="panel" id="panel"></div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
   const PILLARS = [
@@ -379,6 +393,39 @@
 
   function openSettings() { renderPanel(); document.getElementById("overlay").classList.add("show"); }
   function closeSettings() { document.getElementById("overlay").classList.remove("show"); }
+
+  let _toastTimer = null;
+  function flash(msg, ms = 4000) {
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
+  let refreshing = false;
+  async function doRefresh() {
+    const a = api();
+    if (!a || refreshing) return;
+    refreshing = true;
+    const btn = document.getElementById("refresh-btn");
+    const original = btn.innerHTML;
+    btn.innerHTML = "<span>Atualizando…</span>"; btn.disabled = true;
+    flash("Buscando vídeos novos e sintetizando… pode levar até um minuto.", 60000);
+    try {
+      const r = await a.refresh();
+      if (r && r.ok) {
+        await load();
+        flash(`Pronto · ${r.processed || 0} processado(s), ${r.above || 0} acima do limiar` +
+              (r.errors ? ` · ${r.errors} com erro` : ""));
+      } else {
+        flash((r && r.error) || "Não foi possível atualizar.");
+      }
+    } catch (e) {
+      flash(String(e));
+    } finally {
+      refreshing = false; btn.innerHTML = original; btn.disabled = false;
+    }
+  }
 
   function renderPanel() {
     const p = document.getElementById("panel");

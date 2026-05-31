@@ -28,7 +28,10 @@ def _since(cfg):
     return datetime.now(timezone.utc) - timedelta(hours=hours)
 
 
-def run(cfg=None):
+def run(cfg=None, max_total=None):
+    """Roda o pipeline idempotente. Se max_total for dado, para depois de
+    processar esse número de vídeos NOVOS (usado pelo botão Atualizar do app,
+    para não rodar minutos a fio). Retorna um resumo (dict)."""
     cfg = cfg or load()
     store.init()
     started = datetime.now(timezone.utc)
@@ -47,6 +50,8 @@ def run(cfg=None):
     threshold = cfg.get("score_threshold", 60)
 
     for v in videos:
+        if max_total and processed >= max_total:
+            break
         vid = v["video_id"]
         if store.has_video(vid):
             skipped += 1
@@ -98,6 +103,13 @@ def run(cfg=None):
         f"[routine] fim | novos={processed} já_no_banco={skipped} "
         f"abaixo_do_limiar={filtered} erros={errors}"
     )
+    return {
+        "processed": processed,
+        "filtered": filtered,
+        "skipped": skipped,
+        "errors": errors,
+        "above": max(0, processed - filtered),
+    }
 
 
 if __name__ == "__main__":

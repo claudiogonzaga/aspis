@@ -56,18 +56,23 @@ OPTIONS = {
         "httplib2", "oauthlib", "requests_oauthlib", "uritemplate",
         "requests", "certifi", "charset_normalizer", "idna", "urllib3",
         "pyasn1", "pyasn1_modules",
+        # botão Atualizar (pipeline embarcado): transcrições + LLM (google-genai)
+        "youtube_transcript_api", "defusedxml",
+        "websockets", "pydantic", "pydantic_core",
+        "httpx", "httpcore", "anyio", "sniffio", "h11",
     ],
     "includes": [
         "config", "store", "accounts", "keystore", "obsidian", "anki", "download",
-        # módulos pontuais (dotted/soltos) que o accounts.py usa via import tardio
+        # pipeline embarcado para o botão Atualizar rodar dentro do app
+        "youtube", "transcript", "brain", "routine",
+        # módulos pontuais (dotted/soltos) — namespace google NÃO entra em packages
         "google.auth.transport.requests", "google.oauth2.credentials",
-        "google_auth_oauthlib.flow", "google_auth_httplib2",
+        "google.genai", "google_auth_oauthlib.flow", "google_auth_httplib2",
         "googleapiclient.discovery",
     ],
-    # o pipeline pesado de SÍNTESE (transcript + LLM) roda fora do .app, pelo launchd
     "excludes": [
-        "brain", "youtube", "transcript", "routine",
-        "anthropic", "youtube_transcript_api",
+        # provedor desligado (brain importa anthropic de forma tardia só se ativado)
+        "anthropic",
         "tkinter", "test", "tests",
     ],
 }

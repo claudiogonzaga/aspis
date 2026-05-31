@@ -28,6 +28,7 @@ class Api:
     def __init__(self):
         self.cfg = load()
         self.threshold = self.cfg.get("score_threshold", 60)
+        self._refreshing = False
         store.init()
 
     # --- leitura ---
@@ -39,6 +40,37 @@ class Api:
 
     def new_count(self):
         return store.count_at_or_above(self.threshold)
+
+    def refresh(self, max_total=25):
+        """Botão Atualizar: roda o pipeline na hora (busca novos → sintetiza →
+        grava) e devolve um resumo. Exige um canal do YouTube conectado e a
+        chave do Gemini. Limita a `max_total` vídeos novos por clique."""
+        if self._refreshing:
+            return {"ok": False, "error": "Atualização já em andamento."}
+        # pré-checagens amigáveis
+        try:
+            import accounts
+
+            if not accounts.status().get("active"):
+                return {"ok": False, "error": "Conecte um canal do YouTube primeiro."}
+        except Exception:
+            pass
+        import keystore
+
+        env, _ = self._llm_env()
+        if not keystore.has(env):
+            return {"ok": False, "error": "Configure a chave do Gemini primeiro."}
+
+        self._refreshing = True
+        try:
+            import routine
+
+            summary = routine.run(self.cfg, max_total=max_total)
+            return {"ok": True, **summary}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
+        finally:
+            self._refreshing = False
 
     def filtered_count(self, day=None):
         return store.count_below(self.threshold, day=day)
