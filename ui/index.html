@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clípeo</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --fg-secondary: #6b6b6b;
+    --fg-tertiary: #9a9a9a;
+    --border: rgba(0, 0, 0, 0.10);
+    --hover: rgba(0, 0, 0, 0.025);
+    --score: #8a8a8a;
+    --btn-border: rgba(0, 0, 0, 0.18);
+    --btn-hover: rgba(0, 0, 0, 0.04);
+
+    --pill-invest-bg: #EEEDFE;
+    --pill-invest-fg: #3C3489;
+    --pill-saude-bg: #E1F5EE;
+    --pill-saude-fg: #085041;
+    --pill-pat-bg: #FAECE7;
+    --pill-pat-fg: #712B13;
+
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161616;
+      --fg: #ededed;
+      --fg-secondary: #9c9c9c;
+      --fg-tertiary: #6e6e6e;
+      --border: rgba(255, 255, 255, 0.10);
+      --hover: rgba(255, 255, 255, 0.03);
+      --score: #7e7e7e;
+      --btn-border: rgba(255, 255, 255, 0.18);
+      --btn-hover: rgba(255, 255, 255, 0.05);
+      /* pills keep light bg + dark text per spec; legible enough on dark */
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 28px 24px 64px; }
+
+  header { margin-bottom: 22px; }
+  .wordmark { font-size: 15px; font-weight: 500; letter-spacing: 0.01em; }
+  .meta { margin-top: 3px; font-size: 12.5px; color: var(--fg-secondary); }
+  .meta .dot { margin: 0 6px; color: var(--fg-tertiary); }
+
+  .chips { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12.5px; font-weight: 400;
+    padding: 4px 11px; border-radius: 999px;
+    border: 0.5px solid var(--border);
+    color: var(--fg-secondary); background: transparent;
+    cursor: pointer; user-select: none;
+  }
+  .chip:hover { background: var(--hover); }
+  .chip.active { color: var(--fg); border-color: var(--btn-border); font-weight: 500; }
+
+  .list { margin-top: 8px; }
+  .row {
+    display: grid; grid-template-columns: 34px 1fr; column-gap: 14px;
+    padding: 16px 4px; border-top: 0.5px solid var(--border);
+    cursor: pointer;
+  }
+  .list .row:last-child { border-bottom: 0.5px solid var(--border); }
+  .row:hover { background: var(--hover); }
+  .score {
+    font-family: var(--mono); font-size: 12px; color: var(--score);
+    text-align: right; padding-top: 1px;
+  }
+  .title { font-size: 16px; font-weight: 500; line-height: 1.35; }
+  .subline {
+    margin-top: 5px; font-size: 12.5px; color: var(--fg-secondary);
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .pill {
+    font-size: 11px; font-weight: 500; padding: 1.5px 8px; border-radius: 999px;
+  }
+  .pill.investimento { background: var(--pill-invest-bg); color: var(--pill-invest-fg); }
+  .pill.saude       { background: var(--pill-saude-bg);  color: var(--pill-saude-fg); }
+  .pill.paternidade { background: var(--pill-pat-bg);    color: var(--pill-pat-fg); }
+  .pill.nenhum      { background: transparent; color: var(--fg-tertiary); border: 0.5px solid var(--border); }
+  .clickbait-flag { font-size: 11px; color: var(--fg-tertiary); }
+
+  /* Expanded synthesis */
+  .synth {
+    grid-column: 1 / -1; margin-top: 14px; padding-left: 0;
+  }
+  .resumo { font-size: 14px; color: var(--fg); margin-bottom: 14px; }
+  .points { list-style: none; margin-bottom: 14px; }
+  .points li {
+    font-size: 13.5px; color: var(--fg); padding-left: 16px; position: relative;
+    margin-bottom: 5px; line-height: 1.4;
+  }
+  .points li::before {
+    content: "–"; position: absolute; left: 0; color: var(--fg-tertiary);
+  }
+  .synth-meta { font-size: 12px; color: var(--fg-secondary); margin-bottom: 14px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    font-family: var(--sans); font-size: 12.5px; color: var(--fg);
+    padding: 5px 12px; border-radius: 7px;
+    border: 0.5px solid var(--btn-border); background: transparent;
+    cursor: pointer; user-select: none;
+  }
+  .btn:hover { background: var(--btn-hover); }
+  .btn.done { color: var(--fg-secondary); border-color: var(--border); }
+  .reveal {
+    font-size: 12px; color: var(--fg-tertiary); background: none; border: none;
+    cursor: pointer; padding: 5px 4px; margin-left: auto;
+  }
+  .reveal:hover { color: var(--fg-secondary); text-decoration: underline; }
+  .original-title {
+    margin-top: 10px; font-size: 12.5px; color: var(--fg-secondary);
+    font-style: italic;
+  }
+  .original-title.hidden { display: none; }
+
+  footer {
+    margin-top: 36px; padding-top: 16px; border-top: 0.5px solid var(--border);
+    font-size: 12.5px; color: var(--fg-tertiary); text-align: center;
+  }
+  .empty { padding: 48px 8px; text-align: center; color: var(--fg-tertiary); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="wordmark">Clípeo</div>
+    <div class="meta">
+      <span id="today"></span>
+      <span class="dot">·</span>
+      <span id="new-count">—</span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <div class="list" id="list"></div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+  const PILLARS = [
+    { key: null, label: "Tudo" },
+    { key: "saude", label: "Saúde" },
+    { key: "investimento", label: "Investimento" },
+    { key: "paternidade", label: "Paternidade" },
+  ];
+  const PILLAR_LABEL = {
+    saude: "Saúde", investimento: "Investimento",
+    paternidade: "Paternidade", nenhum: "—",
+  };
+
+  let activeFilter = null;
+  let expandedId = null;
+
+  // Bridge: pywebview injects `pywebview.api`. We wait for it.
+  function api() {
+    if (window.pywebview && window.pywebview.api) return window.pywebview.api;
+    return null;
+  }
+
+  function fmtDate(d) {
+    const opts = { weekday: "long", day: "numeric", month: "long" };
+    let s = d.toLocaleDateString("pt-BR", opts);
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function renderChips() {
+    const c = document.getElementById("chips");
+    c.innerHTML = "";
+    for (const p of PILLARS) {
+      const el = document.createElement("div");
+      el.className = "chip" + (activeFilter === p.key ? " active" : "");
+      el.textContent = p.label;
+      el.onclick = () => { activeFilter = p.key; expandedId = null; load(); };
+      c.appendChild(el);
+    }
+  }
+
+  function rowHtml(v) {
+    const pill = `<span class="pill ${v.pillar}">${PILLAR_LABEL[v.pillar] || "—"}</span>`;
+    const cb = v.is_clickbait ? `<span class="clickbait-flag">· sensacionalista</span>` : "";
+    return `
+      <div class="score">${v.score}</div>
+      <div>
+        <div class="title">${esc(v.neutral_title)}</div>
+        <div class="subline">
+          <span>${esc(v.channel)}</span>
+          <span class="dot" style="color:var(--fg-tertiary)">·</span>
+          <span>${esc(v.duration)}</span>
+          ${pill}${cb}
+        </div>
+        <div class="synth-host"></div>
+      </div>`;
+  }
+
+  function synthHtml(v) {
+    const points = (v.pontos_chave || []).map(p => `<li>${esc(p)}</li>`).join("");
+    const nFatos = (v.fatos || []).length;
+    const firstCite = (v.citacoes || [])[0];
+    let metaBits = [];
+    if (nFatos > 0) metaBits.push(`${nFatos} ${nFatos === 1 ? "fato" : "fatos"} para o Anki`);
+    if (firstCite && firstCite.timestamp) metaBits.push(`trecho em ${esc(firstCite.timestamp)}`);
+    const metaLine = metaBits.length ? `<div class="synth-meta">${metaBits.join(" · ")}</div>` : "";
+
+    const b = (flag, label, labelDone, action) =>
+      `<button class="btn ${v[flag] ? "done" : ""}" data-action="${action}">${v[flag] ? labelDone : label}</button>`;
+
+    return `
+      <div class="synth">
+        <div class="resumo">${esc(v.resumo)}</div>
+        ${points ? `<ul class="points">${points}</ul>` : ""}
+        ${metaLine}
+        <div class="actions">
+          <button class="btn" data-action="watch">Assistir</button>
+          ${b("saved_obsidian", "Obsidian", "✓ Obsidian", "obsidian")}
+          ${b("saved_anki", "Anki", "✓ Anki", "anki")}
+          ${b("downloaded", "Baixar", "✓ Baixado", "download")}
+          <button class="reveal" data-action="reveal">título original</button>
+        </div>
+        <div class="original-title hidden">“${esc(v.original_title)}”</div>
+      </div>`;
+  }
+
+  function wireRow(rowEl, v) {
+    rowEl.onclick = (e) => {
+      // ignore clicks inside the expanded synthesis
+      if (e.target.closest(".synth")) return;
+      expandedId = (expandedId === v.video_id) ? null : v.video_id;
+      load();
+    };
+    if (expandedId !== v.video_id) return;
+
+    const host = rowEl.querySelector(".synth-host");
+    host.innerHTML = synthHtml(v);
+
+    host.querySelectorAll("[data-action]").forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        handleAction(btn.dataset.action, v, host);
+      };
+    });
+  }
+
+  async function handleAction(action, v, host) {
+    const a = api();
+    if (action === "reveal") {
+      host.querySelector(".original-title").classList.toggle("hidden");
+      return;
+    }
+    if (!a) { console.warn("api not ready"); return; }
+    try {
+      if (action === "watch") { await a.watch(v.video_id); return; }
+      if (action === "obsidian") { await a.save_obsidian(v.video_id); v.saved_obsidian = 1; }
+      if (action === "anki")     { await a.save_anki(v.video_id);     v.saved_anki = 1; }
+      if (action === "download") { await a.download(v.video_id);      v.downloaded = 1; }
+      host.innerHTML = synthHtml(v);
+      host.querySelectorAll("[data-action]").forEach(btn => {
+        btn.onclick = (e) => { e.stopPropagation(); handleAction(btn.dataset.action, v, host); };
+      });
+    } catch (err) { console.error(action, err); }
+  }
+
+  async function load() {
+    renderChips();
+    const a = api();
+    const list = document.getElementById("list");
+    if (!a) { list.innerHTML = `<div class="empty">Carregando…</div>`; return; }
+
+    let videos = [];
+    try { videos = await a.get_videos(activeFilter); } catch (e) { console.error(e); }
+
+    list.innerHTML = "";
+    if (!videos.length) {
+      list.innerHTML = `<div class="empty">Nada por aqui hoje.</div>`;
+    }
+    for (const v of videos) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = rowHtml(v);
+      list.appendChild(row);
+      wireRow(row, v);
+    }
+
+    // header counts
+    document.getElementById("today").textContent = fmtDate(new Date());
+    try {
+      const n = await a.new_count();
+      document.getElementById("new-count").textContent =
+        `${n} ${n === 1 ? "novo" : "novos"}`;
+    } catch (e) {}
+    try {
+      const f = await a.filtered_count();
+      document.getElementById("footer").textContent =
+        f > 0
+          ? `${f} ${f === 1 ? "vídeo filtrado" : "vídeos filtrados"} hoje por não baterem com seus objetivos.`
+          : "";
+    } catch (e) {}
+  }
+
+  // pywebview signals readiness via this event; also poll as fallback.
+  window.addEventListener("pywebviewready", load);
+  let tries = 0;
+  const poll = setInterval(() => {
+    if (api() || tries++ > 40) { clearInterval(poll); load(); }
+  }, 100);
+</script>
+</body>
+</html>

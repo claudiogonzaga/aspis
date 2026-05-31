@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+
+# segredos e estado local — nunca versionar
+# (config.yaml NÃO tem segredos: chaves de API vêm de variáveis de ambiente)
+client_secret.json
+token.json
+*.sqlite
+*.db
+clipeo.db
+.clipeo/
+
+/tmp/clipeo*.log
+
+# build do py2app (artefatos)
+build/
+dist/

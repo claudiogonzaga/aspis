@@ -1,0 +1,23 @@
+# Clípeo — dependências
+
+# UI (Milestone 1): janela nativa via pywebview + backend WebKit do macOS.
+pywebview==6.2.1
+pyobjc-core==12.2
+pyobjc-framework-Cocoa==12.2
+pyobjc-framework-WebKit==12.2
+pyobjc-framework-Quartz==12.2
+
+# Configuração
+PyYAML==6.0.2
+
+# Cérebro (Milestone 2): YouTube + transcrição + LLMs plugáveis
+google-api-python-client==2.149.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+youtube-transcript-api==1.2.4
+google-genai==1.16.1        # cérebro ATIVO (Gemini)
+anthropic==0.40.0           # cérebro alternativo (desativado por padrão)
+
+# Segundo cérebro / ações (Milestone 2+/3)
+requests==2.32.3
+yt-dlp==2024.12.13

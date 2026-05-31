@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clipeo.daily</string>
+
+    <!-- Roda a rotina com o Python do venv do projeto.
+         Ajuste os caminhos se mover o projeto. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/claudioangelo/Documents/CLAUDE/clipeo/.venv/bin/python</string>
+        <string>/Users/claudioangelo/Documents/CLAUDE/clipeo/routine.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/claudioangelo/Documents/CLAUDE/clipeo</string>
+
+    <!-- launchd NÃO herda o ambiente do shell. Preencha sua chave aqui
+         (este arquivo é local; não comite com a chave real). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>GEMINI_API_KEY</key>
+        <string>COLE_SUA_CHAVE_GEMINI_AQUI</string>
+    </dict>
+
+    <!-- Roda 1x/dia às 6h. O Mac precisa estar acordado nesse horário. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>6</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/clipeo.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/clipeo.err</string>
+</dict>
+</plist>

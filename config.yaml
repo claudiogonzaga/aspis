@@ -1,0 +1,64 @@
+# Clípeo — configuração
+# Edite este arquivo. Segredos (chaves de API) vêm de variáveis de ambiente,
+# nunca daqui. client_secret.json / token.json ficam fora do repositório.
+
+pilares:
+  saude:
+    nome: "Saúde mental e física"
+    descricao: "Saúde baseada em evidência: sono, treino de força, nutrição sustentável, ansiedade, foco."
+    quero: ["protocolos acionáveis", "estudos", "hábitos sustentáveis"]
+    nao_quero: ["dietas milagrosas", "biohacking sem evidência", "fitspiration"]
+  investimento:
+    nome: "Decisões acertadas em investimento"
+    descricao: "Decisões de longo prazo, alocação, gestão de risco, sobriedade."
+    quero: ["frameworks", "dados macro", "análise sóbria"]
+    nao_quero: ["pump de cripto", "day-trade hype", "FOMO", "sinais de compra"]
+  paternidade:
+    nome: "Ser um bom pai"
+    descricao: "Pai presente e melhor: desenvolvimento infantil, disciplina positiva, equilíbrio."
+    quero: ["psicologia do desenvolvimento", "atividades", "comunicação"]
+    nao_quero: ["culpa parental", "comparação", "prescrições rígidas"]
+
+# Vídeos abaixo deste score ficam ocultos da lista (mas contam no rodapé).
+score_threshold: 60
+
+# Janela de busca da rotina (horas para trás a partir do last_run).
+lookback_hours: 36
+
+# Limite de vídeos novos considerados por canal por execução.
+max_videos_per_channel: 8
+
+llm:
+  # Cérebro ATIVO. Troque para "anthropic" (e enabled: true abaixo) quando quiser.
+  provider: gemini
+  max_transcript_chars: 14000        # corta transcrições muito longas para conter custo
+  providers:
+    gemini:
+      enabled: true
+      model: "gemini-3.5-flash"      # string exata do modelo; editável
+      api_key_env: GEMINI_API_KEY    # lido de variável de ambiente
+      temperature: 0.3
+    anthropic:
+      enabled: false                 # pronto para ligar: mude para true e provider: anthropic
+      model: "claude-3-5-haiku-latest"
+      api_key_env: ANTHROPIC_API_KEY
+      temperature: 0.3
+
+youtube:
+  client_secret_path: "~/.clipeo/client_secret.json"
+  token_path: "~/.clipeo/token.json"
+  # Alternativa sem OAuth: liste channel_ids manualmente e use uma API key.
+  # Se 'channels_manuais' estiver preenchido, o OAuth de inscrições é ignorado.
+  channels_manuais: []               # ex.: ["UCxxxx", "UCyyyy"]
+  api_key_env: YOUTUBE_API_KEY       # usado só no modo manual (sem OAuth)
+
+obsidian:
+  vault_path: "~/Obsidian/MeuVault"
+  daily_notes_folder: "Daily"
+
+anki:
+  enabled: true
+  deck: "Clípeo"
+
+download:
+  folder: "~/Clipeo/Downloads"       # pasta sincronizada (Syncthing/Drive)
