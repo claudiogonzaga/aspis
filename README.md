@@ -44,7 +44,8 @@ o `.app` empacotado e a rotina do `launchd` enxerguem o mesmo dado.
 |---|---|
 | `app.py` | Janela pywebview + ponte `Api` (Python↔JS). Lê o SQLite e executa as ações. |
 | `routine.py` | Job diário: fetch → rank → sintetiza → grava → digest. Idempotente. |
-| `youtube.py` | OAuth + inscrições + vídeos novos (YouTube Data API v3). |
+| `accounts.py` | Login do YouTube no app: credencial colada, múltiplos canais, canal ativo. |
+| `youtube.py` | Inscrições + vídeos novos do canal ativo (YouTube Data API v3). |
 | `transcript.py` | Transcrições (youtube-transcript-api), com fallback se não houver legenda. |
 | `brain.py` | **1 chamada de LLM por vídeo**, plugável por provedor (Gemini/Anthropic). |
 | `store.py` | SQLite: schema, cache e estado. |
@@ -80,20 +81,28 @@ export GEMINI_API_KEY="sua-chave"
 Para trocar para o Anthropic: em `config.yaml`, mude `llm.provider` para
 `anthropic`, ponha `enabled: true` no bloco dele, e exporte `ANTHROPIC_API_KEY`.
 
-### 4. YouTube (OAuth)
+### 4. YouTube (login dentro do app)
+
+O login é feito **no próprio app**, no botão **Conta** (canto superior direito).
+Você só precisa criar uma vez a credencial de API do Google:
 
 1. No [Google Cloud Console](https://console.cloud.google.com/): crie um projeto
    e **habilite a YouTube Data API v3**.
-2. Crie uma credencial **OAuth client ID** do tipo **Desktop app**.
-3. Como o escopo `youtube.readonly` é "sensível", adicione **você mesmo como test
-   user** na tela de consentimento (modo de teste — sem precisar de verificação do
-   Google).
-4. Baixe o `client_secret.json` e salve em `~/.clipeo/client_secret.json`.
+2. Credenciais → Criar credencial → **ID do cliente OAuth** → tipo **App para
+   computador**.
+3. Como o escopo `youtube.readonly` é "sensível", em "Tela de consentimento OAuth"
+   adicione **você mesmo como usuário de teste** (modo de teste — sem precisar de
+   verificação do Google).
+4. **Baixe o JSON** da credencial. No Clípeo: **Conta → cole o JSON → Salvar →
+   Conectar**. O navegador abre no login do Google; escolha a **conta** e, se ela
+   tiver vários canais (brand accounts), o **canal**.
 
-Na primeira execução da rotina, o navegador abre para você consentir; o token é
-salvo em `~/.clipeo/token.json` e reaproveitado depois.
+Você pode **conectar vários canais** e alternar qual é o **ativo** na tela Conta.
+A credencial fica em `~/.clipeo/oauth_client.json` e os tokens em
+`~/.clipeo/accounts/` (cada usuário usa a própria credencial; nada vai pro Git).
+A rotina diária (`launchd`) usa sempre o canal ativo.
 
-> Alternativa sem OAuth: preencha `youtube.channels_manuais` no `config.yaml` com
+> Alternativa sem login: preencha `youtube.channels_manuais` no `config.yaml` com
 > os channel IDs e exporte `YOUTUBE_API_KEY`.
 
 ### 5. Anki (opcional)
@@ -105,8 +114,8 @@ for salvar cards.
 
 ```bash
 export GEMINI_API_KEY="sua-chave"
-./.venv/bin/python routine.py     # busca + sintetiza (autoriza o YouTube no navegador)
-./.venv/bin/python app.py         # abre a janela
+./.venv/bin/python app.py         # abre a janela → conecte o YouTube em "Conta"
+./.venv/bin/python routine.py     # depois de conectar: busca + sintetiza
 ```
 
 Para só ver a interface com dados de exemplo (sem rodar o pipeline):

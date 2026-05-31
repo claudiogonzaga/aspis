@@ -45,12 +45,14 @@ llm:
       temperature: 0.3
 
 youtube:
-  client_secret_path: "~/.clipeo/client_secret.json"
-  token_path: "~/.clipeo/token.json"
-  # Alternativa sem OAuth: liste channel_ids manualmente e use uma API key.
-  # Se 'channels_manuais' estiver preenchido, o OAuth de inscrições é ignorado.
+  # LOGIN agora é DENTRO DO APP (botão "Conta" → cola a credencial → Conectar).
+  # Suporta vários canais; o canal ATIVO é escolhido no app. A credencial e os
+  # tokens ficam em ~/.clipeo/oauth_client.json e ~/.clipeo/accounts/.
+  #
+  # Alternativa sem login (modo manual): liste channel_ids e use uma API key.
+  # Se 'channels_manuais' estiver preenchido, ele tem prioridade sobre o login.
   channels_manuais: []               # ex.: ["UCxxxx", "UCyyyy"]
-  api_key_env: YOUTUBE_API_KEY       # usado só no modo manual (sem OAuth)
+  api_key_env: YOUTUBE_API_KEY       # usado só no modo manual (sem login)
 
 obsidian:
   vault_path: "~/Obsidian/MeuVault"

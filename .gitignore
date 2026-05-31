@@ -19,3 +19,8 @@ dist/
 
 # macOS
 .DS_Store
+
+# credenciais/tokens do login YouTube (estado local)
+oauth_client.json
+token_*.json
+accounts/

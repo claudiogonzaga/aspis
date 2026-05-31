@@ -96,6 +96,40 @@ class Api:
         store.set_flag(video_id, "feedback", int(value))
         return {"ok": True}
 
+    # --- conta do YouTube (login multi-canal dentro do app) ---
+    def yt_status(self):
+        import accounts
+
+        return accounts.status()
+
+    def yt_save_client(self, text):
+        """Salva a credencial OAuth colada pelo usuário."""
+        import accounts
+
+        return accounts.save_client(text)
+
+    def yt_connect(self):
+        """Abre o navegador para o usuário logar e escolher a conta/canal.
+        Bloqueia até concluir; devolve o canal conectado ou erro."""
+        import accounts
+
+        return accounts.connect()
+
+    def yt_set_active(self, channel_id):
+        import accounts
+
+        return accounts.set_active(channel_id)
+
+    def yt_remove(self, channel_id):
+        import accounts
+
+        return accounts.remove(channel_id)
+
+    def yt_reset_client(self):
+        import accounts
+
+        return accounts.clear_client()
+
 
 def main():
     if not os.path.exists(UI_PATH):

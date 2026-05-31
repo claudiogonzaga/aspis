@@ -13,7 +13,7 @@ Nunca usamos search.list (100 unidades).
 import re
 from datetime import datetime, timezone
 
-from config import expand, load
+from config import load
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
 
@@ -44,37 +44,8 @@ def _chunks(seq, n):
 
 
 # --- construção do client ---------------------------------------------------
-def _oauth_service(cfg):
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
-
-    token_path = expand(cfg["youtube"]["token_path"])
-    secret_path = expand(cfg["youtube"]["client_secret_path"])
-
-    creds = None
-    import os
-
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if not os.path.exists(secret_path):
-                raise RuntimeError(
-                    f"client_secret.json não encontrado em {secret_path}. "
-                    "Crie a credencial OAuth (Desktop) no Google Cloud e salve aí."
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(secret_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-        os.makedirs(os.path.dirname(token_path), exist_ok=True)
-        with open(token_path, "w", encoding="utf-8") as fh:
-            fh.write(creds.to_json())
-    return build("youtube", "v3", credentials=creds, cache_discovery=False)
-
-
+# O login OAuth multi-canal vive em accounts.py (conectado pelo app). Aqui só
+# resta o modo manual por API key, e o get_service() que escolhe entre os dois.
 def _apikey_service(cfg):
     import os
 
@@ -90,9 +61,13 @@ def _apikey_service(cfg):
 
 def get_service(cfg=None):
     cfg = cfg or load()
+    # Modo manual (API key + lista fixa de canais) continua disponível.
     if cfg["youtube"].get("channels_manuais"):
         return _apikey_service(cfg)
-    return _oauth_service(cfg)
+    # Default: usa o canal ATIVO conectado pelo app (accounts.py).
+    import accounts
+
+    return accounts.service_for_active()
 
 
 # --- API calls --------------------------------------------------------------
