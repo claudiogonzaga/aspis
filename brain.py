@@ -95,11 +95,17 @@ def _build_user_message(video, transcript, cfg):
 
 def _require_key(pcfg, default_env):
     env = pcfg.get("api_key_env", default_env)
-    key = os.environ.get(env)
+    # Prioriza a chave colada no app (~/.clipeo/secrets.json); cai no ambiente.
+    try:
+        import keystore
+
+        key = keystore.get(env)
+    except Exception:
+        key = os.environ.get(env)
     if not key:
         raise RuntimeError(
-            f"Variável de ambiente {env} não definida. "
-            "Exporte a chave antes de rodar a rotina."
+            f"Chave do LLM não configurada. Cole a chave em Configurações no app "
+            f"(ou exporte a variável de ambiente {env})."
         )
     return key
 

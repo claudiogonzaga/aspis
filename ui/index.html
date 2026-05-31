@@ -191,6 +191,16 @@
   .note.ok { color: var(--pill-saude-fg); }
   .onboard { padding: 44px 8px; text-align: center; color: var(--fg-secondary); font-size: 13.5px; line-height: 1.6; }
   .onboard .primary { margin-top: 16px; }
+
+  .section { margin-top: 22px; padding-top: 18px; border-top: 0.5px solid var(--border); }
+  .section:first-of-type { margin-top: 16px; }
+  .sec-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .key-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .inp {
+    flex: 1 1 auto; min-width: 0; font-family: var(--mono); font-size: 12px;
+    border: 0.5px solid var(--btn-border); border-radius: 8px; padding: 8px 10px;
+    background: transparent; color: var(--fg);
+  }
 </style>
 </head>
 <body>
@@ -232,6 +242,7 @@
   let activeFilter = null;
   let expandedId = null;
   let ytStatus = { client_configured: false, channels: [], active: null };
+  let geminiStatus = { configured: false, masked: "", provider: "gemini" };
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
@@ -351,6 +362,7 @@
     const a = api();
     if (!a) return;
     try { ytStatus = await a.yt_status(); } catch (e) { console.error("yt_status", e); }
+    try { geminiStatus = await a.gemini_status(); } catch (e) { console.error("gemini_status", e); }
     renderAcctButton();
   }
 
@@ -370,58 +382,92 @@
 
   function renderPanel() {
     const p = document.getElementById("panel");
-    const s = ytStatus;
-    let body = `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>`;
+    p.innerHTML =
+      `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>
+       <h2>Configurações</h2>` +
+      geminiSectionHtml() +
+      ytSectionHtml();
+  }
 
+  function geminiSectionHtml() {
+    const g = geminiStatus;
+    const ph = g.configured ? `chave salva (${esc(g.masked)}) — cole para trocar` : "AIza…";
+    return `<div class="section">
+      <div class="sec-title">Chave do Gemini</div>
+      <div class="sub">Usada para sintetizar e neutralizar os títulos. Fica só na sua máquina (~/.clipeo).</div>
+      <div class="key-row">
+        <input type="password" class="inp" id="gemini-key" placeholder="${ph}" autocomplete="off" spellcheck="false">
+        <button class="primary" id="save-gemini" onclick="saveGemini()">Salvar</button>
+      </div>
+      <div class="note ${g.configured ? "ok" : ""}" id="gemini-note">${g.configured ? "✓ chave configurada" : "Nenhuma chave ainda."}</div>
+    </div>`;
+  }
+
+  function ytSectionHtml() {
+    const s = ytStatus;
+    let h = `<div class="section"><div class="sec-title">Conta do YouTube</div>`;
     if (!s.client_configured) {
-      body += `
-        <h2>Conectar o YouTube</h2>
-        <div class="sub">Cole sua credencial do Google (OAuth Client do tipo “App para computador”). Ela fica só na sua máquina.</div>
+      h += `<div class="sub">Cole sua credencial do Google (OAuth Client do tipo “App para computador”).</div>
         <textarea class="field" id="client-json" placeholder='{ "installed": { "client_id": "…", "client_secret": "…" } }'></textarea>
         <div class="row-actions"><button class="primary" id="save-client" onclick="saveClient()">Salvar credencial</button></div>
-        <div class="note" id="note"></div>
         <div class="help">
-          <b>Como obter:</b> Google Cloud Console → APIs e Serviços → ative a
-          <b>YouTube Data API v3</b> → Credenciais → Criar credencial → ID do cliente OAuth →
-          tipo <b>App para computador</b>. Em “Tela de consentimento OAuth”, adicione seu e-mail
-          como <b>usuário de teste</b>. Baixe o JSON e cole acima.
+          <b>Como obter:</b> Google Cloud Console → ative a <b>YouTube Data API v3</b> →
+          Credenciais → ID do cliente OAuth → tipo <b>App para computador</b>. Em “Tela de
+          consentimento”, adicione seu e-mail como <b>usuário de teste</b>. Baixe o JSON e cole.
+        </div>`;
+    } else if (!s.channels.length) {
+      h += `<div class="sub">Conecte o canal cujas inscrições o Clípeo deve ler.</div>
+        <div class="row-actions">
+          <button class="primary" id="connect-btn" onclick="connectYt()">Conectar canal do YouTube</button>
+          <button class="lnk" onclick="resetClient()">trocar credencial</button>
         </div>`;
     } else {
-      body += `<h2>Canais do YouTube</h2>
-        <div class="sub">Marque qual canal o Clípeo deve usar. Você pode conectar vários e alternar.</div>`;
-      if (!s.channels.length) {
-        body += `<div class="onboard">Nenhum canal conectado ainda.
-          <br><button class="primary" id="connect-btn" onclick="connectYt()">Conectar canal do YouTube</button></div>`;
-      } else {
-        body += `<div class="chans">`;
-        for (const c of s.channels) {
-          body += `
-            <div class="chan">
-              ${c.thumb ? `<img src="${esc(c.thumb)}" alt="">` : `<div class="ph"></div>`}
-              <div class="info">
-                <div class="nm">${esc(c.title || "Canal")}</div>
-                <div class="hd">${esc(c.handle || "")}</div>
-              </div>
-              ${c.active
-                ? `<span class="active-tag">ativo</span>`
-                : `<button class="lnk" onclick="pickChannel('${esc(c.channel_id)}')">usar este</button>`}
-              <button class="lnk" onclick="removeChannel('${esc(c.channel_id)}')">remover</button>
-            </div>`;
-        }
-        body += `</div>
-          <div class="row-actions">
-            <button class="primary" id="connect-btn" onclick="connectYt()">+ Adicionar canal</button>
-            <button class="lnk" onclick="resetClient()">trocar credencial</button>
+      h += `<div class="sub">Marque o canal ativo. Você pode conectar vários e alternar.</div><div class="chans">`;
+      for (const c of s.channels) {
+        h += `
+          <div class="chan">
+            ${c.thumb ? `<img src="${esc(c.thumb)}" alt="">` : `<div class="ph"></div>`}
+            <div class="info">
+              <div class="nm">${esc(c.title || "Canal")}</div>
+              <div class="hd">${esc(c.handle || "")}</div>
+            </div>
+            ${c.active
+              ? `<span class="active-tag">ativo</span>`
+              : `<button class="lnk" onclick="pickChannel('${esc(c.channel_id)}')">usar este</button>`}
+            <button class="lnk" onclick="removeChannel('${esc(c.channel_id)}')">remover</button>
           </div>`;
       }
-      body += `<div class="note" id="note"></div>`;
+      h += `</div>
+        <div class="row-actions">
+          <button class="primary" id="connect-btn" onclick="connectYt()">+ Adicionar canal</button>
+          <button class="lnk" onclick="resetClient()">trocar credencial</button>
+        </div>`;
     }
-    p.innerHTML = body;
+    h += `<div class="note" id="yt-note"></div></div>`;
+    return h;
+  }
+
+  async function saveGemini() {
+    const a = api();
+    const note = document.getElementById("gemini-note");
+    const btn = document.getElementById("save-gemini");
+    const val = document.getElementById("gemini-key").value;
+    btn.disabled = true; note.className = "note"; note.textContent = "Salvando…";
+    try {
+      const r = await a.save_gemini_key(val);
+      if (r.ok) {
+        try { geminiStatus = await a.gemini_status(); } catch (e) {}
+        renderPanel();
+      } else {
+        note.className = "note err"; note.textContent = r.error || "Não foi possível salvar.";
+        btn.disabled = false;
+      }
+    } catch (e) { note.className = "note err"; note.textContent = String(e); btn.disabled = false; }
   }
 
   async function saveClient() {
     const a = api();
-    const note = document.getElementById("note");
+    const note = document.getElementById("yt-note");
     const btn = document.getElementById("save-client");
     const txt = document.getElementById("client-json").value;
     btn.disabled = true; note.className = "note"; note.textContent = "Validando…";
@@ -434,7 +480,7 @@
 
   async function connectYt() {
     const a = api();
-    const note = document.getElementById("note");
+    const note = document.getElementById("yt-note");
     const btn = document.getElementById("connect-btn");
     if (btn) btn.disabled = true;
     if (note) { note.className = "note"; note.textContent = "Abrindo o navegador para você fazer login e escolher a conta/canal…"; }

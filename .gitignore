@@ -24,3 +24,4 @@ dist/
 oauth_client.json
 token_*.json
 accounts/
+secrets.json

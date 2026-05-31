@@ -51,7 +51,7 @@ OPTIONS = {
         "pyasn1", "pyasn1_modules",
     ],
     "includes": [
-        "config", "store", "accounts", "obsidian", "anki", "download",
+        "config", "store", "accounts", "keystore", "obsidian", "anki", "download",
         # módulos pontuais (dotted/soltos) que o accounts.py usa via import tardio
         "google.auth.transport.requests", "google.oauth2.credentials",
         "google_auth_oauthlib.flow", "google_auth_httplib2",

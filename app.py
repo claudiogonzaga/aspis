@@ -130,6 +130,36 @@ class Api:
 
         return accounts.clear_client()
 
+    # --- chave do LLM (Gemini) ---
+    def _llm_env(self):
+        """Nome da variável de ambiente da chave do provedor ativo."""
+        llm = self.cfg.get("llm", {})
+        prov = llm.get("provider", "gemini")
+        pcfg = llm.get("providers", {}).get(prov, {})
+        return pcfg.get("api_key_env", "GEMINI_API_KEY"), prov
+
+    def gemini_status(self):
+        import keystore
+
+        env, prov = self._llm_env()
+        return {"provider": prov, "env": env,
+                "configured": keystore.has(env), "masked": keystore.masked(env)}
+
+    def save_gemini_key(self, value):
+        import keystore
+
+        env, _ = self._llm_env()
+        if not (value or "").strip():
+            return {"ok": False, "error": "Cole a chave."}
+        return keystore.set_key(env, value)
+
+    def clear_gemini_key(self):
+        import keystore
+
+        env, _ = self._llm_env()
+        keystore.set_key(env, "")
+        return {"ok": True}
+
 
 def main():
     if not os.path.exists(UI_PATH):
