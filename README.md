@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/clipeo_icon_1024.png" width="160" alt="Ícone do Clípeo — escudo de bronze polido">
+</p>
+
 # Clípeo
 
 Um app nativo de macOS, de interface ultra-minimalista, que funciona como um

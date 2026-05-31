@@ -20,12 +20,14 @@ DATA_FILES = [
 
 OPTIONS = {
     "argv_emulation": False,
+    "iconfile": "clipeo.icns",
     "plist": {
         "CFBundleName": "Clípeo",
         "CFBundleDisplayName": "Clípeo",
         "CFBundleIdentifier": "com.clipeo.app",
         "CFBundleVersion": "0.1.0",
         "CFBundleShortVersionString": "0.1.0",
+        "CFBundleIconFile": "clipeo.icns",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
         "LSApplicationCategoryType": "public.app-category.productivity",
