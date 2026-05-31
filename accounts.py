@@ -29,6 +29,29 @@ OAUTH_CLIENT = os.path.join(config.USER_DIR, "oauth_client.json")
 ACCOUNTS_DIR = os.path.join(config.USER_DIR, "accounts")
 INDEX_PATH = os.path.join(ACCOUNTS_DIR, "index.json")
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _bundled_client_candidates():
+    """A credencial OAuth do app vai embutida no .app (Resources via RESOURCEPATH)
+    ou em assets/oauth_client.json quando rodando do código-fonte. Assim o usuário
+    final NÃO precisa colar nada: clica "Conectar com o Google" e cai direto na
+    página de autorização."""
+    cands = []
+    res = os.environ.get("RESOURCEPATH")
+    if res:
+        cands.append(os.path.join(res, "oauth_client.json"))
+    cands.append(os.path.join(_HERE, "assets", "oauth_client.json"))
+    cands.append(os.path.join(_HERE, "oauth_client.json"))
+    return cands
+
+
+def _bundled_client_path():
+    for p in _bundled_client_candidates():
+        if os.path.exists(p):
+            return p
+    return None
+
 _AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 _TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -76,7 +99,8 @@ def save_client(text):
 
 
 def client_configured():
-    return os.path.exists(OAUTH_CLIENT)
+    # credencial do usuário (colada) OU a embutida no app
+    return os.path.exists(OAUTH_CLIENT) or _bundled_client_path() is not None
 
 
 def clear_client():
@@ -91,9 +115,11 @@ def clear_client():
 
 
 def _client_config():
-    if not os.path.exists(OAUTH_CLIENT):
-        raise RuntimeError("Credencial do Google não configurada. Cole o client secret primeiro.")
-    with open(OAUTH_CLIENT, "r", encoding="utf-8") as fh:
+    # prioridade: credencial colada pelo usuário; senão a embutida no app
+    path = OAUTH_CLIENT if os.path.exists(OAUTH_CLIENT) else _bundled_client_path()
+    if not path:
+        raise RuntimeError("Credencial do Google não disponível no app.")
+    with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
 

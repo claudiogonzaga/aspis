@@ -9,6 +9,8 @@ executa as ações dos botões (Obsidian, Anki, Baixar, Assistir). O pipeline di
 (routine.py: YouTube + LLM) roda separado, pelo launchd usando o venv — por isso
 não embrulhamos google-genai/anthropic/googleapiclient aqui (bundle enxuto).
 """
+import os
+
 from setuptools import setup
 
 APP = ["app.py"]
@@ -17,6 +19,11 @@ DATA_FILES = [
     ("ui", ["ui/index.html"]),
     ("", ["config.yaml"]),
 ]
+
+# Credencial OAuth do app (não versionada): se presente, embute no bundle
+# para que o usuário final apenas clique "Conectar com o Google".
+if os.path.exists("assets/oauth_client.json"):
+    DATA_FILES.append(("", ["assets/oauth_client.json"]))
 
 OPTIONS = {
     "argv_emulation": False,

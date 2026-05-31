@@ -416,10 +416,9 @@
           consentimento”, adicione seu e-mail como <b>usuário de teste</b>. Baixe o JSON e cole.
         </div>`;
     } else if (!s.channels.length) {
-      h += `<div class="sub">Conecte o canal cujas inscrições o Clípeo deve ler.</div>
+      h += `<div class="sub">Entre com sua conta do Google e escolha o canal cujas inscrições o Clípeo deve ler.</div>
         <div class="row-actions">
-          <button class="primary" id="connect-btn" onclick="connectYt()">Conectar canal do YouTube</button>
-          <button class="lnk" onclick="resetClient()">trocar credencial</button>
+          <button class="primary" id="connect-btn" onclick="connectYt()">Conectar com o Google</button>
         </div>`;
     } else {
       h += `<div class="sub">Marque o canal ativo. Você pode conectar vários e alternar.</div><div class="chans">`;
@@ -440,7 +439,6 @@
       h += `</div>
         <div class="row-actions">
           <button class="primary" id="connect-btn" onclick="connectYt()">+ Adicionar canal</button>
-          <button class="lnk" onclick="resetClient()">trocar credencial</button>
         </div>`;
     }
     h += `<div class="note" id="yt-note"></div></div>`;
