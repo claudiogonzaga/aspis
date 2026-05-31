@@ -51,7 +51,7 @@ Responda APENAS com o JSON, sem texto antes ou depois, neste formato exato:
   "citacoes": [{"texto": "", "timestamp": "mm:ss"}]
 }"""
 
-MAX_OUTPUT_TOKENS = 1500
+MAX_OUTPUT_TOKENS = 4096  # 1500 truncava o JSON em transcrições longas (parse falhava)
 
 
 def _pillars_block(pilares):
@@ -175,8 +175,17 @@ def _resolve_provider(cfg):
 
 # --- parsing / normalização -------------------------------------------------
 def _parse_json(text):
-    """Parse tolerante: tenta direto, depois recorta do primeiro { ao último }."""
+    """Parse tolerante: remove cercas de código, tenta direto, depois recorta do
+    primeiro { ao último }."""
     text = (text or "").strip()
+    if not text:
+        raise ValueError("resposta do LLM veio vazia (possível truncamento/bloqueio)")
+    # remove cercas markdown ```json ... ```
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
