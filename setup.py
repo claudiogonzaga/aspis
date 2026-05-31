@@ -22,7 +22,10 @@ OPTIONS = {
     "argv_emulation": False,
     "iconfile": "clipeo.icns",
     "plist": {
-        "CFBundleName": "Clípeo",
+        # CFBundleName em ASCII define o nome do bundle/executável (py2app usa
+        # este campo) — acento aqui quebraria o codesign. O nome bonito com
+        # acento aparece no Finder/janela via CFBundleDisplayName.
+        "CFBundleName": "Clipeo",
         "CFBundleDisplayName": "Clípeo",
         "CFBundleIdentifier": "com.clipeo.app",
         "CFBundleVersion": "0.1.0",
@@ -46,9 +49,14 @@ OPTIONS = {
     ],
 }
 
+# IMPORTANTE: o nome do bundle/executável é ASCII ("Clipeo") de propósito.
+# Um nome com acento ("Clípeo") quebra o codesign (divergência de
+# normalização Unicode NFC/NFD no nome do executável), deixando o selo
+# inválido — o que o Gatekeeper, sob quarentena, reporta como "danificado".
+# O nome bonito com acento aparece via CFBundleName/CFBundleDisplayName.
 setup(
     app=APP,
-    name="Clípeo",
+    name="Clipeo",
     data_files=DATA_FILES,
     options={"py2app": OPTIONS},
     setup_requires=["py2app"],

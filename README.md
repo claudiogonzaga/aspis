@@ -130,15 +130,32 @@ Para só ver a interface com dados de exemplo (sem rodar o pipeline):
 
 O Mac precisa estar acordado às 6h (ou ajuste o horário no plist).
 
-## Empacotar como .app
+## Instalar (a partir do .dmg da Release)
+
+1. Baixe o `.dmg` mais recente em **[Releases](../../releases)**.
+2. Abra o `.dmg` e arraste **Clípeo** para **Aplicativos**.
+3. **Primeira abertura** (o app não é assinado por uma conta paga da Apple, então
+   o Gatekeeper avisa que o desenvolvedor "não pode ser verificado"):
+   **clique com o botão direito no Clípeo → Abrir → Abrir**. Só na 1ª vez.
+   - Se ainda recusar, rode no Terminal:
+     `xattr -dr com.apple.quarantine "/Applications/Clipeo.app"` e abra de novo.
+
+> Observação: o bundle no disco se chama `Clipeo.app` (ASCII, exigência do
+> `codesign`), mas o Finder, a janela e o app mostram **"Clípeo"**.
+
+## Empacotar como .app / .dmg (build local)
 
 ```bash
-./.venv/bin/python setup.py py2app
+python3 assets/make_icon.py        # (re)gera o ícone
+bash   assets/build_icns.sh        # gera clipeo.icns
+./make_dmg.sh                      # builda .app, ASSINA (ad-hoc) e empacota o .dmg
 open dist/
 ```
 
-O `.app` em `dist/` é a interface; o pipeline diário continua rodando pelo
-launchd com o venv. Arraste o `.app` para `/Applications` para "instalar".
+O `make_dmg.sh` builda via py2app, assina o bundle de dentro pra fora
+(`assets/sign_app.sh` — necessário porque `codesign --deep` falha na estrutura
+do py2app) e empacota o `.dmg` com atalho para `/Applications`. O `.app` é a
+interface; o pipeline diário continua rodando pelo launchd com o venv.
 
 ## Sync para o Android
 
