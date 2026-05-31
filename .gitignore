@@ -16,3 +16,6 @@ clipeo.db
 # build do py2app (artefatos)
 build/
 dist/
+
+# macOS
+.DS_Store
