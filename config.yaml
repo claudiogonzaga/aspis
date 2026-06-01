@@ -64,3 +64,12 @@ anki:
 
 download:
   folder: "~/Clipeo/Downloads"       # pasta sincronizada (Syncthing/Drive)
+
+transcript:
+  # Legendas via yt-dlp (json3/vtt, com impersonation curl_cffi); fallback
+  # youtube-transcript-api. Se o YouTube bloquear por IP (HTTP 429) OU não houver
+  # legenda, cai para o Whisper local (baixa o áudio e transcreve offline).
+  whisper:
+    enabled: false        # true = sempre usar Whisper (ignora legendas)
+    auto_on_block: true   # usar Whisper automaticamente quando o YouTube bloquear (429)
+    model: "base"         # tiny|base|small|medium|large

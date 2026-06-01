@@ -75,12 +75,35 @@ def _parse_json3(data):
     return segments
 
 
+# sinaliza, via atributo de módulo, se a última tentativa do yt-dlp bateu em
+# bloqueio de IP (HTTP 429) — usado pela cascata para decidir cair no Whisper.
+_last_blocked = False
+
+
+def _ydl_opts_base():
+    """Opções comuns: impersonar um navegador real (curl_cffi) reduz muito o
+    429 nas URLs de legenda/mídia do YouTube. O yt-dlp exige um objeto
+    ImpersonateTarget (não uma string)."""
+    opts = {"quiet": True, "no_warnings": True}
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+
+        opts["impersonate"] = ImpersonateTarget("chrome")
+    except Exception:
+        pass
+    return opts
+
+
 def _via_ytdlp(video_id):
-    """Deixa o PRÓPRIO yt-dlp baixar o arquivo de legenda (json3) para uma pasta
-    temporária e então lê. Baixar a URL na mão falha: o YouTube agora exige um
-    token (po_token) nessas URLs, que o yt-dlp resolve internamente."""
+    """Deixa o PRÓPRIO yt-dlp baixar o arquivo de legenda (json3/vtt) para uma
+    pasta temporária e então lê. Baixar a URL na mão falha (po_token); o yt-dlp
+    resolve internamente. Usa impersonation (curl_cffi) e pausa entre legendas
+    para evitar o 429. Marca _last_blocked=True se o YouTube rate-limitar."""
+    global _last_blocked
+    _last_blocked = False
     import glob
     import os
+    import shutil
     import tempfile
 
     try:
@@ -90,47 +113,79 @@ def _via_ytdlp(video_id):
 
     tmp = tempfile.mkdtemp(prefix="clipeo_sub_")
     opts = {
+        **_ydl_opts_base(),
         "skip_download": True,
-        "quiet": True,
-        "no_warnings": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
         "subtitleslangs": PREFERRED_LANGS + ["pt.*", "en.*"],
-        "subtitlesformat": "json3",
+        "subtitlesformat": "json3/vtt/best",
+        "sleep_interval_subtitles": 1,
         "outtmpl": os.path.join(tmp, "%(id)s.%(ext)s"),
     }
     try:
         with YoutubeDL(opts) as ydl:
             ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-    except Exception:
-        pass  # mesmo com erro parcial, pode ter escrito um arquivo
+    except Exception as e:
+        if "429" in str(e) or "Too Many Requests" in str(e):
+            _last_blocked = True
+        # mesmo com erro parcial, pode ter escrito um arquivo
 
     try:
-        files = sorted(glob.glob(os.path.join(tmp, "*.json3")))
-        # prioriza idioma preferido pela ordem do nome do arquivo
+        files = glob.glob(os.path.join(tmp, "*.json3")) + glob.glob(
+            os.path.join(tmp, "*.vtt")
+        )
+
         def rank(path):
             base = os.path.basename(path)
             for i, lang in enumerate(PREFERRED_LANGS):
                 if f".{lang}." in base:
                     return i
             return len(PREFERRED_LANGS)
+
         for path in sorted(files, key=rank):
             if os.path.getsize(path) < 10:
                 continue
             with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                data = json.load(fh)
-            segments = _parse_json3(data)
+                raw = fh.read()
+            if path.endswith(".json3"):
+                segments = _parse_json3(json.loads(raw))
+            else:
+                segments = _parse_vtt(raw)
             if segments:
                 return segments
         return None
     except Exception:
         return None
     finally:
-        try:
-            import shutil
-            shutil.rmtree(tmp, ignore_errors=True)
-        except Exception:
-            pass
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _parse_vtt(text):
+    """WebVTT → lista de segments {text, start, ts}, deduplicando linhas
+    repetidas (comum em legenda autogerada com rolagem)."""
+    import re
+
+    segments = []
+    last = None
+    cur_start = 0.0
+    ts_re = re.compile(r"(\d+):(\d{2}):(\d{2})[.,](\d{3})\s*-->")
+    for line in text.splitlines():
+        m = ts_re.search(line)
+        if m:
+            h, mn, s, ms = (int(x) for x in m.groups())
+            cur_start = h * 3600 + mn * 60 + s + ms / 1000.0
+            continue
+        if "-->" in line or line.strip() in ("WEBVTT", "") or line.startswith(
+            ("Kind:", "Language:", "NOTE")
+        ):
+            continue
+        clean = re.sub(r"<[^>]+>", "", line).strip()
+        if clean and clean != last:
+            segments.append(
+                {"text": clean, "start": cur_start, "ts": _fmt_ts(cur_start)}
+            )
+            last = clean
+    return segments
 
 
 # --- 2) youtube-transcript-api (fallback) ----------------------------------
@@ -166,7 +221,10 @@ def _via_whisper(video_id, cfg):
     usuário habilitar (config transcript.whisper.enabled) e as libs existirem.
     Não vem embutido no .app (modelo + ffmpeg são pesados)."""
     tcfg = (cfg or {}).get("transcript", {}).get("whisper", {})
-    if not tcfg.get("enabled"):
+    # Liga se: sempre (enabled) OU só quando o YouTube bloqueou as legendas por
+    # IP (auto_on_block + _last_blocked). É o caminho de fallback automático.
+    allow = tcfg.get("enabled") or (tcfg.get("auto_on_block", True) and _last_blocked)
+    if not allow:
         return None
     try:
         import os
@@ -184,9 +242,8 @@ def _via_whisper(video_id, cfg):
         tmp = tempfile.mkdtemp(prefix="clipeo_wh_")
         out = os.path.join(tmp, "%(id)s.%(ext)s")
         opts = {
+            **_ydl_opts_base(),
             "skip_download": False,
-            "quiet": True,
-            "no_warnings": True,
             "format": "bestaudio/best",
             "outtmpl": out,
             "postprocessors": [
@@ -223,15 +280,24 @@ def _via_whisper(video_id, cfg):
 # --- API pública ------------------------------------------------------------
 def get_transcript(video_id, cfg=None):
     """Retorna {available, text, segments, source}. segments é lista de
-    {text, start, ts}. Em ausência total de legenda: {available: False, ...}."""
+    {text, start, ts}. Em ausência total de legenda: {available: False, ...}.
+
+    Cascata: 1) yt-dlp (legenda oficial, com impersonation); 2) se NÃO bloqueado
+    por IP, tenta youtube-transcript-api; 3) Whisper local (se habilitado) — que
+    é o caminho quando o YouTube rate-limita as legendas (429), pois baixa o
+    áudio por um endpoint diferente e transcreve offline."""
     source = None
     segments = _via_ytdlp(video_id)
     if segments:
         source = "yt-dlp"
-    if not segments:
+
+    # A youtube-transcript-api usa o MESMO endpoint de legenda; se o yt-dlp
+    # tomou 429, ela também tomaria — pula direto pro Whisper.
+    if not segments and not _last_blocked:
         segments = _via_api(video_id)
         if segments:
             source = "youtube-transcript-api"
+
     if not segments:
         segments = _via_whisper(video_id, cfg)
         if segments:

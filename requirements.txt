@@ -20,4 +20,5 @@ anthropic==0.40.0           # cérebro alternativo (desativado por padrão)
 
 # Segundo cérebro / ações (Milestone 2+/3)
 requests==2.32.3
-yt-dlp==2025.11.12
+yt-dlp==2026.03.17
+curl_cffi==0.14.0

@@ -58,6 +58,7 @@ OPTIONS = {
         "pyasn1", "pyasn1_modules",
         # botão Atualizar (pipeline embarcado): transcrições + LLM (google-genai)
         "youtube_transcript_api", "defusedxml",
+        "curl_cffi",  # impersonation de navegador → reduz HTTP 429 nas legendas
         "websockets", "pydantic", "pydantic_core",
         "httpx", "httpcore", "anyio", "sniffio", "h11",
     ],
