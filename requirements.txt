@@ -22,3 +22,4 @@ anthropic==0.40.0           # cérebro alternativo (desativado por padrão)
 requests==2.32.3
 yt-dlp==2026.03.17
 curl_cffi==0.14.0
+faster-whisper

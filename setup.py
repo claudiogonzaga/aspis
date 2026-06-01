@@ -61,6 +61,9 @@ OPTIONS = {
         "curl_cffi",  # impersonation de navegador → reduz HTTP 429 nas legendas
         "websockets", "pydantic", "pydantic_core",
         "httpx", "httpcore", "anyio", "sniffio", "h11",
+        # Whisper local (fallback quando o YouTube bloqueia as legendas por IP)
+        "faster_whisper", "ctranslate2", "av", "tokenizers",
+        "huggingface_hub", "tqdm",
     ],
     "includes": [
         "config", "store", "accounts", "keystore", "obsidian", "anki", "download",
