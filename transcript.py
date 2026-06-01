@@ -220,7 +220,13 @@ def _via_whisper(video_id, cfg):
     """Reserva: baixa o áudio e transcreve com Whisper local. Só roda se o
     usuário habilitar (config transcript.whisper.enabled) e as libs existirem.
     Não vem embutido no .app (modelo + ffmpeg são pesados)."""
-    tcfg = (cfg or {}).get("transcript", {}).get("whisper", {})
+    # Lê a config efetiva do Whisper (overlay do usuário em ~/.clipeo/whisper.json
+    # tem prioridade sobre o config.yaml).
+    try:
+        import config
+        tcfg = config.get_whisper()
+    except Exception:
+        tcfg = (cfg or {}).get("transcript", {}).get("whisper", {})
     # Liga se: sempre (enabled) OU só quando o YouTube bloqueou as legendas por
     # IP (auto_on_block + _last_blocked). É o caminho de fallback automático.
     allow = tcfg.get("enabled") or (tcfg.get("auto_on_block", True) and _last_blocked)

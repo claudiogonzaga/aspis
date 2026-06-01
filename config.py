@@ -113,3 +113,43 @@ def save_pilares(pilares):
     os.makedirs(USER_DIR, exist_ok=True)
     with open(USER_PILARES, "w", encoding="utf-8") as fh:
         json.dump(_with_peso(pilares), fh, ensure_ascii=False, indent=2)
+
+
+# --- modelo do Whisper (fallback de transcrição), editável pelo usuário -----
+USER_WHISPER = os.path.join(USER_DIR, "whisper.json")
+WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
+
+
+def get_whisper():
+    """Config efetiva do Whisper: ~/.clipeo/whisper.json se existir; senão a do
+    config.yaml (transcript.whisper). Garante chaves model/enabled/auto_on_block."""
+    base = (load().get("transcript", {}) or {}).get("whisper", {}) or {}
+    cfg = {
+        "enabled": bool(base.get("enabled", False)),
+        "auto_on_block": bool(base.get("auto_on_block", True)),
+        "model": base.get("model", "base"),
+    }
+    if os.path.exists(USER_WHISPER):
+        try:
+            with open(USER_WHISPER, "r", encoding="utf-8") as fh:
+                cfg.update(json.load(fh))
+        except (json.JSONDecodeError, OSError):
+            pass
+    if cfg.get("model") not in WHISPER_MODELS:
+        cfg["model"] = "base"
+    return cfg
+
+
+def save_whisper(model=None, enabled=None, auto_on_block=None):
+    """Persiste a config do Whisper escolhida pelo usuário."""
+    cfg = get_whisper()
+    if model is not None and model in WHISPER_MODELS:
+        cfg["model"] = model
+    if enabled is not None:
+        cfg["enabled"] = bool(enabled)
+    if auto_on_block is not None:
+        cfg["auto_on_block"] = bool(auto_on_block)
+    os.makedirs(USER_DIR, exist_ok=True)
+    with open(USER_WHISPER, "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, ensure_ascii=False, indent=2)
+    return cfg

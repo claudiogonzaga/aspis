@@ -192,6 +192,39 @@ class Api:
         keystore.set_key(env, "")
         return {"ok": True}
 
+    # --- Whisper (fallback de transcrição) ---
+    def whisper_status(self):
+        import config
+
+        w = config.get_whisper()
+        # marca quais modelos já estão baixados em cache local
+        downloaded = set()
+        try:
+            import os
+
+            hub = os.path.expanduser("~/.cache/huggingface/hub")
+            if os.path.isdir(hub):
+                for name in os.listdir(hub):
+                    for m in config.WHISPER_MODELS:
+                        tag = "large-v3" if m == "large-v3" else m
+                        if f"faster-whisper-{tag}" in name:
+                            downloaded.add(m)
+        except Exception:
+            pass
+        return {
+            "model": w.get("model", "base"),
+            "enabled": w.get("enabled", False),
+            "auto_on_block": w.get("auto_on_block", True),
+            "models": config.WHISPER_MODELS,
+            "downloaded": sorted(downloaded),
+        }
+
+    def save_whisper(self, model=None, enabled=None, auto_on_block=None):
+        import config
+
+        cfg = config.save_whisper(model=model, enabled=enabled, auto_on_block=auto_on_block)
+        return {"ok": True, **cfg}
+
     # --- objetivos (pilares) editáveis, com peso ---
     def get_pilares(self):
         import config

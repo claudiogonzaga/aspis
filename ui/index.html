@@ -216,6 +216,8 @@
   .obj-head .inp { flex: 1 1 auto; }
   .peso-sel { font-size: 12px; padding: 6px 6px; border-radius: 7px; border: 0.5px solid var(--btn-border); background: transparent; color: var(--fg); }
   .obj-desc { min-height: 56px; margin-top: 8px; }
+  .wcheck { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-secondary); margin-top: 10px; cursor: pointer; }
+  .wcheck input { margin: 0; }
 </style>
 </head>
 <body>
@@ -276,6 +278,7 @@
   let expandedId = null;
   let ytStatus = { client_configured: false, channels: [], active: null };
   let geminiStatus = { configured: false, masked: "", provider: "gemini" };
+  let whisperStatus = { model: "base", enabled: false, auto_on_block: true, models: [], downloaded: [] };
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
@@ -397,6 +400,7 @@
     if (!a) return;
     try { ytStatus = await a.yt_status(); } catch (e) { console.error("yt_status", e); }
     try { geminiStatus = await a.gemini_status(); } catch (e) { console.error("gemini_status", e); }
+    try { whisperStatus = await a.whisper_status(); } catch (e) { console.error("whisper_status", e); }
     renderAcctButton();
   }
 
@@ -460,7 +464,55 @@
        <h2>Configurações</h2>` +
       geminiSectionHtml() +
       objectivesSectionHtml() +
+      whisperSectionHtml() +
       ytSectionHtml();
+  }
+
+  const WHISPER_LABELS = {
+    "tiny": "tiny — mais rápido, menor qualidade (~75 MB)",
+    "base": "base — equilíbrio (padrão) (~145 MB)",
+    "small": "small — melhor qualidade (~480 MB)",
+    "medium": "medium — alta qualidade, mais lento (~1.5 GB)",
+    "large-v3": "large-v3 — máxima qualidade, bem mais lento (~3 GB)",
+  };
+
+  function whisperSectionHtml() {
+    const w = whisperStatus;
+    const opts = (w.models || []).map(m => {
+      const dl = (w.downloaded || []).includes(m) ? " ✓ baixado" : "";
+      const label = (WHISPER_LABELS[m] || m) + dl;
+      return `<option value="${m}" ${m === w.model ? "selected" : ""}>${label}</option>`;
+    }).join("");
+    return `<div class="section">
+      <div class="sec-title">Transcrição (Whisper)</div>
+      <div class="sub">Reserva para quando o YouTube não entrega a legenda: o app baixa o áudio e transcreve localmente. Modelos maiores = melhor qualidade, mais lentos. O modelo é baixado uma vez, no primeiro uso.</div>
+      <div class="key-row">
+        <select class="inp" id="whisper-model" onchange="saveWhisper()">${opts}</select>
+      </div>
+      <label class="wcheck"><input type="checkbox" id="whisper-auto" ${w.auto_on_block ? "checked" : ""} onchange="saveWhisper()"> Usar automaticamente quando o YouTube bloquear a legenda</label>
+      <label class="wcheck"><input type="checkbox" id="whisper-always" ${w.enabled ? "checked" : ""} onchange="saveWhisper()"> Sempre usar Whisper (ignora as legendas do YouTube)</label>
+      <div class="note ok" id="whisper-note"></div>
+    </div>`;
+  }
+
+  async function saveWhisper() {
+    const a = api();
+    const model = document.getElementById("whisper-model").value;
+    const auto = document.getElementById("whisper-auto").checked;
+    const always = document.getElementById("whisper-always").checked;
+    const note = document.getElementById("whisper-note");
+    note.className = "note"; note.textContent = "Salvando…";
+    try {
+      const r = await a.save_whisper(model, always, auto);
+      if (r && r.ok) {
+        whisperStatus = { ...whisperStatus, model: r.model, enabled: r.enabled, auto_on_block: r.auto_on_block };
+        const dl = (whisperStatus.downloaded || []).includes(model);
+        note.className = "note ok";
+        note.textContent = "✓ salvo." + (dl ? "" : " O modelo será baixado no próximo uso do Whisper.");
+      } else {
+        note.className = "note err"; note.textContent = (r && r.error) || "Falha ao salvar.";
+      }
+    } catch (e) { note.className = "note err"; note.textContent = String(e); }
   }
 
   function geminiSectionHtml() {
