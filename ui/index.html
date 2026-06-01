@@ -228,7 +228,10 @@
   .wcheck input { margin: 0; }
   .row.is-read .title { color: var(--fg-secondary); }
   .row.is-read .score { opacity: 0.55; }
-  .chip-read { margin-left: auto; }
+  .chip-stars { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+  .chip-stars-ic { color: #d8a13a; letter-spacing: 0.5px; font-size: 11px; }
+  .chip-stars-ic .star-off { color: var(--border); }
+  .chip-read { /* fica logo após o de estrelas */ }
   .thr-val { font-family: var(--mono); font-size: 12px; }
   .star-row { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
   .star-pick { font-size: 22px; line-height: 1; background: none; border: none; cursor: pointer; color: var(--border); padding: 0 2px; }
@@ -331,6 +334,22 @@
       el.onclick = () => { activeFilter = p.key; expandedId = null; load(); };
       c.appendChild(el);
     }
+
+    // filtro por estrelas: mostra quantas estrelas estão sendo exigidas;
+    // clicar diminui o mínimo (mostra mais); ao chegar em 0★, volta para 5★.
+    const sf = document.createElement("div");
+    sf.className = "chip chip-stars";
+    const on = "★".repeat(minStars);
+    const off = `<span class="star-off">${"★".repeat(5 - minStars)}</span>`;
+    sf.innerHTML = `<span class="chip-stars-ic">${on}${off}</span> ${minStars}★+`;
+    sf.title = "Filtro por estrelas — clique para mostrar mais (menos estrelas)";
+    sf.onclick = async () => {
+      minStars = minStars > 0 ? minStars - 1 : 5;   // cicla 3→2→1→0→5→4...
+      try { await api().set_min_stars(minStars); } catch (e) {}
+      expandedId = null; load();
+    };
+    c.appendChild(sf);
+
     // toggle para mostrar/ocultar os lidos
     const r = document.createElement("div");
     r.className = "chip chip-read" + (showRead ? " active" : "");
@@ -880,7 +899,7 @@
     const list = document.getElementById("list");
     if (!a) { list.innerHTML = `<div class="empty">Carregando…</div>`; return; }
 
-    try { const vp = await a.get_view_prefs(); period = vp.period; renderPeriod(); } catch (e) {}
+    try { const vp = await a.get_view_prefs(); period = vp.period; minStars = vp.min_stars; renderPeriod(); renderChips(); } catch (e) {}
     await refreshYtStatus();
     await refreshPilares();
     document.getElementById("today").textContent = fmtDate(new Date());
