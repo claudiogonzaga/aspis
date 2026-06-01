@@ -66,7 +66,8 @@ def _pillars_block(pilares):
 
 
 def _system_text(cfg):
-    return SYSTEM_RULES + "\n\n" + _pillars_block(cfg["pilares"])
+    import config
+    return SYSTEM_RULES + "\n\n" + _pillars_block(config.get_pilares())
 
 
 def _build_user_message(video, transcript, cfg):

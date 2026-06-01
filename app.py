@@ -192,6 +192,55 @@ class Api:
         keystore.set_key(env, "")
         return {"ok": True}
 
+    # --- objetivos (pilares) editáveis, com peso ---
+    def get_pilares(self):
+        import config
+
+        return [
+            {"id": k, "nome": p.get("nome", k),
+             "descricao": p.get("descricao", ""), "peso": p.get("peso", 3)}
+            for k, p in config.get_pilares().items()
+        ]
+
+    def save_pilares(self, items):
+        import re
+        import unicodedata
+
+        import config
+
+        def slug(s):
+            s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
+            s = re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+            return s[:24] or "obj"
+
+        prev = config.get_pilares()
+        out = {}
+        for it in (items or []):
+            nome = (it.get("nome") or "").strip()
+            if not nome:
+                continue
+            key = (it.get("id") or "").strip().lower() or slug(nome)
+            base, n = key, 2
+            while key in out:
+                key = f"{base}-{n}"
+                n += 1
+            try:
+                peso = int(it.get("peso", 3))
+            except (TypeError, ValueError):
+                peso = 3
+            old = prev.get(it.get("id", ""), {})
+            out[key] = {
+                "nome": nome,
+                "descricao": (it.get("descricao") or "").strip(),
+                "quero": old.get("quero", []),
+                "nao_quero": old.get("nao_quero", []),
+                "peso": max(1, min(5, peso)),
+            }
+        if not out:
+            return {"ok": False, "error": "Defina ao menos um objetivo."}
+        config.save_pilares(out)
+        return {"ok": True, "pilares": self.get_pilares()}
+
 
 def main():
     if not os.path.exists(UI_PATH):

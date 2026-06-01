@@ -11,6 +11,7 @@ O banco SQLite e o estado ficam SEMPRE em ~/.clipeo/clipeo.db, para que o .app
 (que só lê) e a rotina (que escreve) enxerguem o mesmo dado, não importa de onde
 cada um seja executado.
 """
+import json
 import os
 import shutil
 from functools import lru_cache
@@ -74,3 +75,41 @@ def db_path():
     """SQLite compartilhado em ~/.clipeo/clipeo.db."""
     os.makedirs(USER_DIR, exist_ok=True)
     return USER_DB
+
+
+# --- objetivos (pilares) editáveis pelo usuário -----------------------------
+USER_PILARES = os.path.join(USER_DIR, "pilares.json")
+DEFAULT_PESO = 3
+
+
+def _with_peso(pilares):
+    """Garante peso inteiro 1..5 (neutro=3) em cada pilar."""
+    out = {}
+    for k, p in (pilares or {}).items():
+        p = dict(p or {})
+        try:
+            peso = int(p.get("peso", DEFAULT_PESO))
+        except (TypeError, ValueError):
+            peso = DEFAULT_PESO
+        p["peso"] = max(1, min(5, peso))
+        out[k] = p
+    return out
+
+
+def get_pilares():
+    """Pilares efetivos: ~/.clipeo/pilares.json se existir; senão os do
+    config.yaml. Sempre com 'peso' normalizado."""
+    if os.path.exists(USER_PILARES):
+        try:
+            with open(USER_PILARES, "r", encoding="utf-8") as fh:
+                return _with_peso(json.load(fh))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return _with_peso(load().get("pilares", {}))
+
+
+def save_pilares(pilares):
+    """Persiste os objetivos editados pelo usuário em ~/.clipeo/pilares.json."""
+    os.makedirs(USER_DIR, exist_ok=True)
+    with open(USER_PILARES, "w", encoding="utf-8") as fh:
+        json.dump(_with_peso(pilares), fh, ensure_ascii=False, indent=2)

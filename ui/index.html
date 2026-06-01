@@ -210,6 +210,12 @@
     border: 0.5px solid var(--btn-border); border-radius: 8px; padding: 8px 10px;
     background: transparent; color: var(--fg);
   }
+  .obj { padding: 10px 0; border-top: 0.5px solid var(--border); }
+  .obj:first-of-type { border-top: none; }
+  .obj-head { display: flex; gap: 8px; align-items: center; }
+  .obj-head .inp { flex: 1 1 auto; }
+  .peso-sel { font-size: 12px; padding: 6px 6px; border-radius: 7px; border: 0.5px solid var(--btn-border); background: transparent; color: var(--fg); }
+  .obj-desc { min-height: 56px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -242,16 +248,29 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const PILLARS = [
-    { key: null, label: "Tudo" },
-    { key: "saude", label: "Saúde" },
-    { key: "investimento", label: "Investimento" },
-    { key: "paternidade", label: "Paternidade" },
+  let PILLARS = [{ key: null, label: "Tudo" }];
+  let pilares = [];            // [{id, nome, descricao, peso}]
+  let pillMeta = {};           // id -> {label, bg, fg}
+  let objDraft = [];           // cópia de edição na tela de Configurações
+  const PALETTE = [
+    { bg: "#EEEDFE", fg: "#3C3489" }, { bg: "#E1F5EE", fg: "#085041" },
+    { bg: "#FAECE7", fg: "#712B13" }, { bg: "#E7F0FB", fg: "#1B4F8A" },
+    { bg: "#FBF3E0", fg: "#7A5A12" }, { bg: "#F3E8F7", fg: "#6A2A7A" },
   ];
-  const PILLAR_LABEL = {
-    saude: "Saúde", investimento: "Investimento",
-    paternidade: "Paternidade", nenhum: "—",
-  };
+  function buildPillMeta() {
+    PILLARS = [{ key: null, label: "Tudo" }];
+    pillMeta = { nenhum: { label: "—", bg: "transparent", fg: "var(--fg-tertiary)" } };
+    pilares.forEach((p, i) => {
+      const c = PALETTE[i % PALETTE.length];
+      PILLARS.push({ key: p.id, label: p.nome });
+      pillMeta[p.id] = { label: p.nome, bg: c.bg, fg: c.fg };
+    });
+  }
+  async function refreshPilares() {
+    const a = api(); if (!a) return;
+    try { pilares = await a.get_pilares(); } catch (e) { console.error("get_pilares", e); }
+    buildPillMeta();
+  }
 
   let activeFilter = null;
   let expandedId = null;
@@ -288,7 +307,8 @@
   }
 
   function rowHtml(v) {
-    const pill = `<span class="pill ${v.pillar}">${PILLAR_LABEL[v.pillar] || "—"}</span>`;
+    const m = pillMeta[v.pillar] || pillMeta["nenhum"];
+    const pill = `<span class="pill" style="background:${m.bg};color:${m.fg}">${esc(m.label)}</span>`;
     const cb = v.is_clickbait ? `<span class="clickbait-flag">· sensacionalista</span>` : "";
     return `
       <div class="score">${v.score}</div>
@@ -391,7 +411,13 @@
     }
   }
 
-  function openSettings() { renderPanel(); document.getElementById("overlay").classList.add("show"); }
+  async function openSettings() {
+    document.getElementById("overlay").classList.add("show");
+    await refreshYtStatus();
+    await refreshPilares();
+    objDraft = pilares.map(p => ({ ...p }));
+    renderPanel();
+  }
   function closeSettings() { document.getElementById("overlay").classList.remove("show"); }
 
   let _toastTimer = null;
@@ -433,6 +459,7 @@
       `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>
        <h2>Configurações</h2>` +
       geminiSectionHtml() +
+      objectivesSectionHtml() +
       ytSectionHtml();
   }
 
@@ -490,6 +517,54 @@
     }
     h += `<div class="note" id="yt-note"></div></div>`;
     return h;
+  }
+
+  function objectivesSectionHtml() {
+    const rows = objDraft.map((o, i) => `
+      <div class="obj">
+        <div class="obj-head">
+          <input class="inp" value="${esc(o.nome || "")}" placeholder="Nome do objetivo"
+                 oninput="objField(${i}, 'nome', this.value)">
+          <select class="peso-sel" onchange="objField(${i}, 'peso', +this.value)" title="Peso (importância)">
+            ${[1,2,3,4,5].map(n => `<option value="${n}" ${n === (o.peso || 3) ? "selected" : ""}>peso ${n}</option>`).join("")}
+          </select>
+          <button class="lnk" onclick="removeObjective(${i})">remover</button>
+        </div>
+        <textarea class="field obj-desc" placeholder="O que você QUER e o que NÃO quer ver neste objetivo."
+                  oninput="objField(${i}, 'descricao', this.value)">${esc(o.descricao || "")}</textarea>
+      </div>`).join("");
+    return `<div class="section">
+      <div class="sec-title">Objetivos</div>
+      <div class="sub">A IA julga cada vídeo contra estes objetivos; o peso (1–5, padrão 3) define a importância no ranqueamento.</div>
+      ${rows}
+      <div class="row-actions">
+        <button class="lnk" onclick="addObjective()">+ adicionar objetivo</button>
+        <button class="primary" onclick="saveObjectives()">Salvar objetivos</button>
+      </div>
+      <div class="note" id="obj-note"></div>
+    </div>`;
+  }
+
+  function objField(i, k, v) { if (objDraft[i]) objDraft[i][k] = v; }
+  function addObjective() { objDraft.push({ id: "", nome: "", descricao: "", peso: 3 }); renderPanel(); }
+  function removeObjective(i) { objDraft.splice(i, 1); renderPanel(); }
+  async function saveObjectives() {
+    const a = api();
+    const note = document.getElementById("obj-note");
+    note.className = "note"; note.textContent = "Salvando…";
+    try {
+      const r = await a.save_pilares(objDraft);
+      if (r && r.ok) {
+        await refreshPilares();
+        objDraft = pilares.map(p => ({ ...p }));
+        renderPanel();
+        const n2 = document.getElementById("obj-note");
+        if (n2) { n2.className = "note ok"; n2.textContent = "✓ objetivos salvos. Clique ↻ Atualizar para reavaliar os vídeos."; }
+        load();
+      } else {
+        note.className = "note err"; note.textContent = (r && r.error) || "Não foi possível salvar.";
+      }
+    } catch (e) { note.className = "note err"; note.textContent = String(e); }
   }
 
   async function saveGemini() {
@@ -575,6 +650,7 @@
     if (!a) { list.innerHTML = `<div class="empty">Carregando…</div>`; return; }
 
     await refreshYtStatus();
+    await refreshPilares();
     document.getElementById("today").textContent = fmtDate(new Date());
     if (!ytStatus.active) {
       renderOnboard(list);
