@@ -115,6 +115,40 @@ def save_pilares(pilares):
         json.dump(_with_peso(pilares), fh, ensure_ascii=False, indent=2)
 
 
+# --- limiar de score, editável pelo usuário ---------------------------------
+USER_PREFS = os.path.join(USER_DIR, "prefs.json")
+
+
+def _load_prefs():
+    if os.path.exists(USER_PREFS):
+        try:
+            with open(USER_PREFS, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def get_threshold():
+    """Limiar de score efetivo: prefs do usuário tem prioridade sobre config.yaml."""
+    p = _load_prefs()
+    if "score_threshold" in p:
+        try:
+            return max(0, min(100, int(p["score_threshold"])))
+        except (TypeError, ValueError):
+            pass
+    return int(load().get("score_threshold", 60))
+
+
+def set_threshold(value):
+    p = _load_prefs()
+    p["score_threshold"] = max(0, min(100, int(value)))
+    os.makedirs(USER_DIR, exist_ok=True)
+    with open(USER_PREFS, "w", encoding="utf-8") as fh:
+        json.dump(p, fh, ensure_ascii=False, indent=2)
+    return p["score_threshold"]
+
+
 # --- modelo do Whisper (fallback de transcrição), editável pelo usuário -----
 USER_WHISPER = os.path.join(USER_DIR, "whisper.json")
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3"]

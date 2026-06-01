@@ -218,6 +218,12 @@
   .obj-desc { min-height: 56px; margin-top: 8px; }
   .wcheck { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-secondary); margin-top: 10px; cursor: pointer; }
   .wcheck input { margin: 0; }
+  .row.is-read .title { color: var(--fg-secondary); }
+  .row.is-read .score { opacity: 0.55; }
+  .chip-read { margin-left: auto; }
+  .thr-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .thr-row input[type=range] { flex: 1 1 auto; }
+  .thr-val { font-family: var(--mono); font-size: 12px; min-width: 2.2em; text-align: right; }
 </style>
 </head>
 <body>
@@ -276,10 +282,12 @@
 
   let activeFilter = null;
   let expandedId = null;
+  let showRead = false;   // mostrar também os marcados como lidos
   let ytStatus = { client_configured: false, channels: [], active: null };
   let geminiStatus = { configured: false, masked: "", provider: "gemini" };
   let whisperStatus = { model: "base", enabled: false, auto_on_block: true, models: [], downloaded: [] };
   let updateStatus = {};   // {checking|error|current|latest|update_available|dmg_url}
+  let threshold = 60;
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
@@ -308,6 +316,12 @@
       el.onclick = () => { activeFilter = p.key; expandedId = null; load(); };
       c.appendChild(el);
     }
+    // toggle para mostrar/ocultar os lidos
+    const r = document.createElement("div");
+    r.className = "chip chip-read" + (showRead ? " active" : "");
+    r.textContent = showRead ? "Ocultar lidos" : "Mostrar lidos";
+    r.onclick = () => { showRead = !showRead; expandedId = null; load(); };
+    c.appendChild(r);
   }
 
   function rowHtml(v) {
@@ -350,6 +364,7 @@
           ${b("saved_obsidian", "Obsidian", "✓ Obsidian", "obsidian")}
           ${b("saved_anki", "Anki", "✓ Anki", "anki")}
           ${b("downloaded", "Baixar", "✓ Baixado", "download")}
+          ${b("read", "Marcar lido", "✓ Lido", "read")}
           <button class="reveal" data-action="reveal">título original</button>
         </div>
         <div class="original-title hidden">“${esc(v.original_title)}”</div>
@@ -388,6 +403,13 @@
       if (action === "obsidian") { await a.save_obsidian(v.video_id); v.saved_obsidian = 1; }
       if (action === "anki")     { await a.save_anki(v.video_id);     v.saved_anki = 1; }
       if (action === "download") { await a.download(v.video_id);      v.downloaded = 1; }
+      if (action === "read") {
+        const novo = v.read ? 0 : 1;
+        await a.set_read(v.video_id, novo);
+        v.read = novo;
+        // se marcou como lido e não estamos mostrando lidos, some da lista
+        if (novo && !showRead) { expandedId = null; load(); return; }
+      }
       host.innerHTML = synthHtml(v);
       host.querySelectorAll("[data-action]").forEach(btn => {
         btn.onclick = (e) => { e.stopPropagation(); handleAction(btn.dataset.action, v, host); };
@@ -420,6 +442,7 @@
     document.getElementById("overlay").classList.add("show");
     await refreshYtStatus();
     await refreshPilares();
+    try { threshold = (await api().get_threshold()).threshold; } catch (e) {}
     objDraft = pilares.map(p => ({ ...p }));
     renderPanel();
     // verifica atualizações em segundo plano (não bloqueia a abertura)
@@ -468,8 +491,35 @@
       updateSectionHtml() +
       geminiSectionHtml() +
       objectivesSectionHtml() +
+      thresholdSectionHtml() +
       whisperSectionHtml() +
       ytSectionHtml();
+  }
+
+  function thresholdSectionHtml() {
+    return `<div class="section">
+      <div class="sec-title">Limiar de exibição</div>
+      <div class="sub">Vídeos com alinhamento abaixo deste valor ficam ocultos da lista principal. Menor = mostra mais; maior = só os mais alinhados.</div>
+      <div class="thr-row">
+        <input type="range" min="0" max="100" step="5" value="${threshold}"
+               id="thr-range" oninput="onThrInput(this.value)" onchange="saveThreshold(this.value)">
+        <span class="thr-val" id="thr-val">${threshold}</span>
+      </div>
+      <div class="note" id="thr-note"></div>
+    </div>`;
+  }
+
+  function onThrInput(v) { document.getElementById("thr-val").textContent = v; }
+
+  async function saveThreshold(v) {
+    const a = api();
+    const note = document.getElementById("thr-note");
+    try {
+      const r = await a.set_threshold(parseInt(v, 10));
+      threshold = r.threshold;
+      if (note) { note.className = "note ok"; note.textContent = "✓ limiar salvo."; }
+      load();
+    } catch (e) { if (note) { note.className = "note err"; note.textContent = String(e); } }
   }
 
   function updateSectionHtml() {
@@ -770,15 +820,15 @@
     }
 
     let videos = [];
-    try { videos = await a.get_videos(activeFilter); } catch (e) { console.error(e); }
+    try { videos = await a.get_videos(activeFilter, showRead); } catch (e) { console.error(e); }
 
     list.innerHTML = "";
     if (!videos.length) {
-      list.innerHTML = `<div class="empty">Nada por aqui hoje.</div>`;
+      list.innerHTML = `<div class="empty">${showRead ? "Nada por aqui." : "Nada por aqui — talvez tudo já esteja lido."}</div>`;
     }
     for (const v of videos) {
       const row = document.createElement("div");
-      row.className = "row";
+      row.className = "row" + (v.read ? " is-read" : "");
       row.innerHTML = rowHtml(v);
       list.appendChild(row);
       wireRow(row, v);
@@ -793,10 +843,12 @@
     } catch (e) {}
     try {
       const f = await a.filtered_count();
-      document.getElementById("footer").textContent =
-        f > 0
-          ? `${f} ${f === 1 ? "vídeo filtrado" : "vídeos filtrados"} hoje por não baterem com seus objetivos.`
-          : "";
+      let rc = 0;
+      try { rc = await a.read_count(); } catch (e) {}
+      const bits = [];
+      if (f > 0) bits.push(`${f} ${f === 1 ? "vídeo filtrado" : "vídeos filtrados"} por não baterem com seus objetivos`);
+      if (rc > 0) bits.push(`${rc} ${rc === 1 ? "lido" : "lidos"}`);
+      document.getElementById("footer").textContent = bits.join(" · ");
     } catch (e) {}
   }
 

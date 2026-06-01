@@ -27,19 +27,45 @@ class Api:
 
     def __init__(self):
         self.cfg = load()
-        self.threshold = self.cfg.get("score_threshold", 60)
         self._refreshing = False
         store.init()
 
+    @property
+    def threshold(self):
+        # lido dinamicamente: reflete ajustes feitos nas Configurações
+        import config
+
+        return config.get_threshold()
+
+    def get_threshold(self):
+        import config
+
+        return {"threshold": config.get_threshold()}
+
+    def set_threshold(self, value):
+        import config
+
+        return {"ok": True, "threshold": config.set_threshold(value)}
+
     # --- leitura ---
-    def get_videos(self, pillar=None):
-        return store.get_videos(filter_pillar=pillar, min_score=self.threshold)
+    def get_videos(self, pillar=None, include_read=False):
+        return store.get_videos(
+            filter_pillar=pillar, min_score=self.threshold, include_read=include_read
+        )
 
     def get_synthesis(self, video_id):
         return store.get_video(video_id)
 
     def new_count(self):
-        return store.count_at_or_above(self.threshold)
+        # "novos" = acima do limiar e ainda não lidos
+        return len(store.get_videos(min_score=self.threshold, include_read=False))
+
+    def read_count(self):
+        return store.count_read(self.threshold)
+
+    def set_read(self, video_id, value=1):
+        store.set_flag(video_id, "read", int(value))
+        return {"ok": True}
 
     def refresh(self, max_total=25):
         """Botão Atualizar: roda o pipeline na hora (busca novos → sintetiza →

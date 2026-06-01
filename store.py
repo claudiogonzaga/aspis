@@ -23,14 +23,15 @@ CREATE TABLE IF NOT EXISTS videos (
     feedback INTEGER DEFAULT 0,        -- -1 / 0 / +1
     saved_obsidian INTEGER DEFAULT 0,
     saved_anki INTEGER DEFAULT 0,
-    downloaded INTEGER DEFAULT 0
+    downloaded INTEGER DEFAULT 0,
+    read INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 # Colunas que viajam como JSON (lista/objeto) entre o banco e o resto do app.
 _JSON_FIELDS = ("pontos_chave", "fatos", "citacoes")
-_FLAGS = ("saved_obsidian", "saved_anki", "downloaded")
+_FLAGS = ("saved_obsidian", "saved_anki", "downloaded", "read")
 
 
 def _connect():
@@ -43,6 +44,10 @@ def init():
     """Cria o schema se ainda não existir. Seguro chamar sempre."""
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        # migração: bancos antigos não têm a coluna 'read'
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
+        if "read" not in cols:
+            conn.execute("ALTER TABLE videos ADD COLUMN read INTEGER DEFAULT 0")
 
 
 def now_iso():
@@ -90,11 +95,14 @@ def upsert_video(v):
         conn.execute(sql, [v.get(c) for c in cols])
 
 
-def get_videos(filter_pillar=None, min_score=0, day=None):
+def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False):
     """Lista vídeos acima do limiar, ordenados por score desc.
-    `day` (YYYY-MM-DD) filtra por published_at, se informado."""
+    `day` (YYYY-MM-DD) filtra por published_at, se informado.
+    `include_read=False` (padrão) oculta os marcados como lidos."""
     q = "SELECT * FROM videos WHERE score >= ?"
     args = [min_score]
+    if not include_read:
+        q += " AND COALESCE(read, 0) = 0"
     if filter_pillar:
         q += " AND pillar = ?"
         args.append(filter_pillar)
@@ -105,6 +113,15 @@ def get_videos(filter_pillar=None, min_score=0, day=None):
     with _connect() as conn:
         rows = conn.execute(q, args).fetchall()
     return [_row_to_dict(r) for r in rows]
+
+
+def count_read(min_score=0):
+    """Quantos vídeos acima do limiar foram marcados como lidos."""
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM videos WHERE score >= ? AND COALESCE(read,0) = 1",
+            (min_score,),
+        ).fetchone()[0]
 
 
 def get_video(video_id):

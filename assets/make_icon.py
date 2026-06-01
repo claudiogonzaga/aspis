@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Gera o ícone do Clípeo: um clipeus (escudo redondo) de bronze polido,
-inspirado no escudo-espelho de Perseu.
+"""Ícone do Clípeo: um Gorgoneion (a face frontal da Medusa, com serpentes no
+lugar dos cabelos) gravado no disco de bronze de um escudo redondo (aspis) —
+o motivo apotropaico clássico e a "cara" do escudo de Perseu.
 
-Saída: assets/clipeo_icon_1024.png (mestre 1024x1024, fundo arredondado).
-A partir dele, build_icns.sh gera o .icns com todos os tamanhos.
+Saída: assets/clipeo_icon_1024.png. build_icns.sh gera o .icns.
 
-Técnica: modela a superfície do escudo como um height field (boss central
-abaulado + rim biselado + anéis incisos), calcula normais e aplica
-iluminação difusa + especular (luz no alto-esquerda) para o brilho metálico.
-Renderiza em 2x e reduz com LANCZOS para antialiasing.
+Abordagem: disco metálico (numpy, gradiente radial). O Gorgoneion é desenhado
+como BAIXO-RELEVO no próprio bronze: traços claros (luz) e escuros (sombra)
+sobre o tom do disco, em vez de cores chapadas — assim parece cunhado no metal.
+Supersampling 2x + LANCZOS.
 """
+import math
+import os
+
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 OUT = 1024
-W = OUT * 2  # supersampling
-
-# ---- grids centrados (-1..1 em relação a meia-largura) ----
-ax = (np.arange(W) + 0.5) / W * 2 - 1  # -1..1
-xx, yy = np.meshgrid(ax, ax)
+W = OUT * 2
+C = W / 2.0
 
 
 def smoothstep(e0, e1, x):
@@ -26,140 +26,146 @@ def smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-def normalize(vx, vy, vz):
-    n = np.sqrt(vx * vx + vy * vy + vz * vz) + 1e-9
-    return vx / n, vy / n, vz / n
-
-
-# =========================================================
-# 1) FUNDO: squircle (superelipse) com gradiente noturno
-# =========================================================
-A = 0.94  # meia-extensão do squircle (deixa margem p/ corner do macOS)
-N_SE = 5.0
-se = (np.abs(xx / A) ** N_SE + np.abs(yy / A) ** N_SE)
-bg_mask = smoothstep(1.0 + 0.012, 1.0 - 0.012, se)  # 1 dentro, 0 fora
-
-# gradiente vertical: topo grafite-azulado -> base quase preto
-top = np.array([0.118, 0.145, 0.216])   # #1e2537
-bot = np.array([0.039, 0.051, 0.086])   # #0a0d16
+# ---------- fundo squircle escuro ----------
+ax = (np.arange(W) + 0.5) / W * 2 - 1
+xx, yy = np.meshgrid(ax, ax)
+se = (np.abs(xx / 0.94) ** 5.0 + np.abs(yy / 0.94) ** 5.0)
+bg_alpha = smoothstep(1.012, 0.988, se)
 g = (yy + 1) / 2
-bg = top[None, None, :] * (1 - g[..., None]) + bot[None, None, :] * g[..., None]
-# vinheta radial sutil (escurece cantos)
-rad = np.sqrt(xx ** 2 + yy ** 2)
-vig = 1 - 0.22 * smoothstep(0.2, 1.3, rad)
-bg = bg * vig[..., None]
-# brilho ambiente suave no alto-esquerda
-glow = np.clip(1 - np.sqrt((xx + 0.45) ** 2 + (yy + 0.45) ** 2) / 1.4, 0, 1) ** 2
-bg = bg + glow[..., None] * np.array([0.05, 0.06, 0.09])[None, None, :]
-bg = np.clip(bg, 0, 1)
+bg = (np.array([0.115, 0.142, 0.212])[None, None, :] * (1 - g[..., None])
+      + np.array([0.035, 0.047, 0.082])[None, None, :] * g[..., None])
+glow = np.clip(1 - np.sqrt((xx + 0.4) ** 2 + (yy + 0.4) ** 2) / 1.4, 0, 1) ** 2
+bg = np.clip(bg + glow[..., None] * np.array([0.05, 0.06, 0.09])[None, None, :], 0, 1)
 
-# =========================================================
-# 2) ESCUDO: height field + iluminação
-# =========================================================
-R = 0.70                    # raio do escudo (em unidades de meia-largura)
+# ---------- disco de bronze ----------
+R = 0.72
 dist = np.sqrt(xx ** 2 + yy ** 2)
-rr = dist / R               # 0 no centro, 1 na borda
+rr = dist / R
+dome = np.sqrt(np.clip(1 - np.clip(rr, 0, 1) ** 2, 0, 1))
+diag = (-(xx) - (yy)) / 1.5
+lum = np.clip(0.36 + 0.46 * (dome * 0.9 + 0.1) + 0.16 * diag, 0, 1)
+ringband = np.exp(-((rr - 0.9) ** 2) / (2 * 0.02 ** 2))
+lum = np.clip(lum - 0.16 * ringband, 0, 1)
 
-# --- height field h(rr) ---
-h = np.zeros_like(rr)
+stops = np.array([0.00, 0.30, 0.55, 0.75, 0.90, 1.00])
+pal_r = np.array([0x3a, 0x73, 0xad, 0xd9, 0xef, 0xff]) / 255
+pal_g = np.array([0x25, 0x49, 0x76, 0xa2, 0xc9, 0xf6]) / 255
+pal_b = np.array([0x10, 0x1b, 0x2b, 0x40, 0x66, 0xda]) / 255
+bronze = np.stack([np.interp(lum, stops, pal_r),
+                   np.interp(lum, stops, pal_g),
+                   np.interp(lum, stops, pal_b)], axis=-1)
+rim = smoothstep(0.965, 0.995, rr) * smoothstep(1.02, 0.995, rr)
+bronze = bronze * (1 - 0.55 * rim[..., None])
+disc_alpha = smoothstep(1.004, 0.996, rr)
 
-# rim (borda elevada) entre rimIn..1.0, perfil arredondado
-rimIn = 0.78
-trim = np.clip((rr - rimIn) / (1.0 - rimIn), 0, 1)
-rim_profile = np.sin(np.pi * trim)            # 0 nas pontas, 1 no meio do rim
-h += 0.22 * rim_profile * (rr <= 1.0)
+sh = smoothstep(1.16, 0.7, np.sqrt((xx - 0.04) ** 2 + (yy - 0.05) ** 2) / R) * 0.5
+img = bg * (1 - sh[..., None] * 0.9)
+a = disc_alpha[..., None]
+img = np.clip(img * (1 - a) + bronze * a, 0, 1)
+base = Image.fromarray((np.dstack([img, bg_alpha]) * 255 + 0.5).astype(np.uint8))
+base = base.convert("RGBA")
 
-# campo levemente côncavo entre boss e rim
-field = (rr > 0.24) & (rr < rimIn)
-h += -0.04 * np.cos(np.pi * np.clip((rr - 0.24) / (rimIn - 0.24), 0, 1)) * field
+# tom médio do bronze (para o relevo se fundir ao disco)
+MID = (181, 140, 70)
+LO = (96, 70, 30)      # sombra gravada
+LO2 = (60, 43, 18)     # sombra profunda (contorno)
+HI = (245, 224, 150)   # realce (luz no metal)
 
-# boss central (umbo) abaulado
-bossR = 0.26
-dome = np.sqrt(np.clip(1 - (rr / bossR) ** 2, 0, 1))
-h += 0.42 * dome
 
-# bico central (ponta do umbo)
-tipR = 0.06
-h += 0.10 * np.sqrt(np.clip(1 - (rr / tipR) ** 2, 0, 1))
+def P(cx, cy, r):
+    return [cx - r, cy - r, cx + r, cy + r]
 
-# anéis concêntricos incisos (sulcos finos) — vales gaussianos
-for rc in (0.40, 0.58, 0.70):
-    h -= 0.05 * np.exp(-((rr - rc) ** 2) / (2 * 0.012 ** 2))
 
-# --- normais a partir do gradiente do height field ---
-# escala o gradiente para acentuar o relevo
-gy, gx = np.gradient(h)
-scale = W * 0.018
-nx, ny, nz = normalize(-gx * scale, -gy * scale, np.ones_like(h))
+def draw_gorgon(d, ink_lo, ink_lo2, ink_hi, mid, dy=0.0):
+    """Desenha o relevo. dy desloca verticalmente (usado p/ camada de sombra)."""
+    face_r = R * C * 0.46
+    cy = C + dy
 
-# --- luz: alto-esquerda, ligeiramente frontal ---
-lx, ly, lz = normalize(-0.55, -0.55, 0.78)
-diff = np.clip(nx * lx + ny * ly + nz * lz, 0, 1)
+    # --- serpentes: laços curtos e grossos radiando, em pares (cabelo de cobras) ---
+    n = 10
+    ring_r = face_r * 1.02
+    for i in range(n):
+        ang = (i / n) * 2 * math.pi - math.pi / 2
+        bx, by = C + math.cos(ang) * ring_r, cy + math.sin(ang) * ring_r
+        seglen = face_r * 0.62
+        nb = 5
+        pts = []
+        for j in range(nb):
+            t = j / (nb - 1)
+            perp = ang + math.pi / 2
+            wob = math.sin(t * math.pi * 1.6 + i * 1.3) * face_r * 0.22
+            px = bx + math.cos(ang) * seglen * t + math.cos(perp) * wob
+            py = by + math.sin(ang) * seglen * t + math.sin(perp) * wob
+            pts.append((px, py, face_r * (0.20 * (1 - 0.45 * t))))
+        # corpo: sombra grossa + preenchimento médio + fio de luz
+        for px, py, rad in pts:
+            d.ellipse(P(px, py, rad + face_r * 0.05), fill=ink_lo2)
+        for px, py, rad in pts:
+            d.ellipse(P(px, py, rad), fill=mid)
+        for px, py, rad in pts:
+            d.ellipse(P(px - rad * 0.35, py - rad * 0.35, rad * 0.42), fill=ink_hi)
+        # cabeça
+        hx, hy, _ = pts[-1]
+        hx += math.cos(ang) * face_r * 0.12
+        hy += math.sin(ang) * face_r * 0.12
+        d.ellipse(P(hx, hy, face_r * 0.13 + face_r * 0.04), fill=ink_lo2)
+        d.ellipse(P(hx, hy, face_r * 0.13), fill=mid)
 
-# especular (Blinn-Phong) — meio-vetor com o olho em +z
-hx, hy, hz = normalize(lx, ly, lz + 1.0)
-spec = np.clip(nx * hx + ny * hy + nz * hz, 0, 1) ** 36.0
+    # --- rosto ---
+    d.ellipse(P(C, cy, face_r + face_r * 0.05), fill=ink_lo2)
+    d.ellipse(P(C, cy, face_r), fill=mid)
+    # bochechas com leve sombreado nas laterais
+    d.ellipse(P(C, cy, face_r * 0.98), outline=ink_lo, width=int(face_r * 0.04))
 
-# luminância metálica: ambiente + difusa + sheen direcional
-proj = (-(xx) - (yy)) / 1.45           # gradiente diagonal (polimento)
-lum = 0.20 + 0.86 * diff + 0.20 * proj
-lum = np.clip(lum, 0, 1)
+    # --- olhos amendoados, grandes, severos ---
+    eye_dx, eye_dy, ew, eh = face_r * 0.40, -face_r * 0.06, face_r * 0.30, face_r * 0.20
+    for sgn in (-1, 1):
+        ex, ey = C + sgn * eye_dx, cy + eye_dy
+        d.ellipse([ex - ew, ey - eh, ex + ew, ey + eh], fill=ink_lo2)              # órbita
+        d.ellipse([ex - ew * 0.86, ey - eh * 0.82, ex + ew * 0.86, ey + eh * 0.82],
+                  fill=ink_hi)                                                      # esclera clara
+        d.ellipse(P(ex, ey, eh * 0.62), fill=ink_lo2)                              # íris
+        d.ellipse(P(ex, ey, eh * 0.30), fill=(15, 12, 8))                          # pupila
+    # sobrancelhas grossas franzidas (V) — fúria
+    bw = int(face_r * 0.10)
+    d.line([C - eye_dx - ew, cy + eye_dy - eh * 1.25,
+            C - face_r * 0.06, cy + eye_dy - eh * 0.45], fill=ink_lo2, width=bw)
+    d.line([C + eye_dx + ew, cy + eye_dy - eh * 1.25,
+            C + face_r * 0.06, cy + eye_dy - eh * 0.45], fill=ink_lo2, width=bw)
 
-# --- paleta bronze/ouro: L -> cor (sombras abronzeadas, realce ouro pálido) ---
-stops = np.array([0.00, 0.28, 0.48, 0.66, 0.80, 0.92, 1.00])
-pal_r = np.array([0x2c, 0x5e, 0x9a, 0xcb, 0xea, 0xfa, 0xff]) / 255
-pal_g = np.array([0x18, 0x39, 0x66, 0x96, 0xbf, 0xe4, 0xfd]) / 255
-pal_b = np.array([0x09, 0x12, 0x22, 0x33, 0x57, 0xa6, 0xee]) / 255
-shield_rgb = np.stack([
-    np.interp(lum, stops, pal_r),
-    np.interp(lum, stops, pal_g),
-    np.interp(lum, stops, pal_b),
-], axis=-1)
+    # --- nariz ---
+    ny = cy + face_r * 0.30
+    d.line([C, cy + eye_dy + eh * 0.2, C, ny], fill=ink_lo, width=int(face_r * 0.05))
+    d.ellipse(P(C - face_r * 0.05, ny, face_r * 0.045), fill=ink_lo2)
+    d.ellipse(P(C + face_r * 0.05, ny, face_r * 0.045), fill=ink_lo2)
 
-# realce especular branco-dourado por cima
-shield_rgb = shield_rgb + spec[..., None] * np.array([0.95, 0.85, 0.55])[None, None, :]
+    # --- boca aberta + dentes + língua (traço icônico do Gorgoneion) ---
+    my, mw = cy + face_r * 0.58, face_r * 0.40
+    d.ellipse([C - mw, my - face_r * 0.14, C + mw, my + face_r * 0.16], fill=(20, 12, 8))
+    d.rectangle([C - mw * 0.82, my - face_r * 0.12, C + mw * 0.82, my - face_r * 0.03],
+                fill=ink_hi)  # dentes
+    # divisórias dos dentes
+    for t in (-0.5, 0, 0.5):
+        xx0 = C + t * mw * 1.3
+        d.line([xx0, my - face_r * 0.12, xx0, my - face_r * 0.03], fill=(120, 90, 50),
+               width=max(2, int(face_r * 0.012)))
+    d.ellipse([C - face_r * 0.13, my + face_r * 0.0, C + face_r * 0.13, my + face_r * 0.30],
+              fill=(150, 55, 48))  # língua
 
-# sulcos escuros marcados (reforça as linhas concêntricas)
-groove = np.zeros_like(rr)
-for rc in (0.40, 0.58, 0.70):
-    groove += np.exp(-((rr - rc) ** 2) / (2 * 0.008 ** 2))
-shield_rgb = shield_rgb * (1 - 0.28 * groove[..., None])
 
-# faixa de "espelho polido": brilho diagonal suave no alto-esquerda
-streak = np.clip(1 - np.abs((xx + yy) + 0.55) / 0.45, 0, 1) ** 2
-streak = streak * smoothstep(1.0, 0.6, rr)  # só dentro do escudo
-shield_rgb = shield_rgb + streak[..., None] * np.array([0.20, 0.18, 0.12])[None, None, :]
+# camada de sombra (deslocada) + camada principal, depois blur leve
+shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+draw_gorgon(ImageDraw.Draw(shadow), (0, 0, 0, 150), (0, 0, 0, 180),
+            (0, 0, 0, 120), (0, 0, 0, 120), dy=W * 0.006)
+shadow = shadow.filter(ImageFilter.GaussianBlur(W / 200))
 
-shield_rgb = np.clip(shield_rgb, 0, 1)
+layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+draw_gorgon(ImageDraw.Draw(layer), LO + (255,), LO2 + (255,), HI + (255,), MID + (255,))
 
-# máscara do disco do escudo (AA na borda)
-shield_a = smoothstep(1.0 + 0.006, 1.0 - 0.006, rr)
+out = Image.alpha_composite(base, shadow)
+out = Image.alpha_composite(out, layer)
 
-# =========================================================
-# 3) SOMBRA do escudo sobre o fundo
-# =========================================================
-sh_dist = np.sqrt((xx - 0.045) ** 2 + (yy - 0.06) ** 2) / R
-shadow = smoothstep(1.18, 0.62, sh_dist) * 0.55
-
-# =========================================================
-# 4) COMPOSIÇÃO
-# =========================================================
-img = bg.copy()
-# aplica sombra (escurece) dentro do fundo
-img = img * (1 - shadow[..., None] * 0.9)
-# compõe escudo
-a = shield_a[..., None]
-img = img * (1 - a) + shield_rgb * a
-img = np.clip(img, 0, 1)
-
-# alpha final = squircle do fundo (cantos transparentes)
-alpha = bg_mask
-rgba = np.dstack([img, alpha])
-arr = (rgba * 255 + 0.5).astype(np.uint8)
-
-im = Image.fromarray(arr, "RGBA").resize((OUT, OUT), Image.LANCZOS)
-import os
-os.makedirs(os.path.dirname(__file__) or ".", exist_ok=True)
+icon = out.resize((OUT, OUT), Image.LANCZOS)
 path = os.path.join(os.path.dirname(__file__) or ".", "clipeo_icon_1024.png")
-im.save(path)
-print("salvo:", path, im.size)
+icon.save(path)
+print("salvo:", path, icon.size)
