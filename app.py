@@ -174,21 +174,30 @@ class Api:
         return {"ok": True}
 
     def watch(self, video_id):
-        """Abre o arquivo LOCAL no player do sistema — nunca o YouTube."""
-        v = store.get_video(video_id)
+        """Baixa (se preciso) e abre o arquivo LOCAL no player do sistema —
+        nunca o YouTube. Devolve erro legível em vez de travar."""
         try:
             import download as dl
+        except ImportError:
+            return {"ok": False, "error": "Módulo de download indisponível."}
 
-            path = dl.local_path(video_id, self.cfg) if hasattr(dl, "local_path") else None
-            if not v or not v.get("downloaded") or not path or not os.path.exists(path):
-                dl.download(video_id, self.cfg)
-                path = dl.local_path(video_id, self.cfg)
+        try:
+            path = dl.local_path(video_id, self.cfg)
+            if not os.path.exists(path):
+                # download() devolve o caminho REAL (pode não ser .mp4 sem ffmpeg)
+                path = dl.download(video_id, self.cfg)
+            if not path or not os.path.exists(path):
+                return {"ok": False, "error": "O download não produziu um arquivo."}
             store.set_flag(video_id, "downloaded", 1)
             subprocess.run(["open", path], check=False)
             return {"ok": True, "path": path}
-        except ImportError:
-            print(f"[m2] watch({video_id}) — download/player chega no M3")
-            return {"ok": False, "reason": "m3"}
+        except Exception as e:  # noqa: BLE001 — erro vai para a UI
+            msg = str(e)
+            if "ffmpeg" in msg.lower():
+                msg = "Falta o ffmpeg para juntar vídeo+áudio. Instale com: brew install ffmpeg"
+            elif "429" in msg or "Too Many Requests" in msg:
+                msg = "O YouTube limitou os downloads agora (tente mais tarde)."
+            return {"ok": False, "error": msg}
 
     def set_feedback(self, video_id, value):
         store.set_flag(video_id, "feedback", int(value))

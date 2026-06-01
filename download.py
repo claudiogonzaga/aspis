@@ -44,9 +44,40 @@ def is_downloaded(video_id, cfg=None):
         return False
 
 
+def _ffmpeg_path():
+    """Acha o ffmpeg mesmo quando o app é aberto pelo Finder/Dock (PATH mínimo,
+    sem /opt/homebrew/bin). Retorna o caminho do binário ou None."""
+    import shutil
+
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    for cand in (
+        "/opt/homebrew/bin/ffmpeg",   # Apple Silicon (Homebrew)
+        "/usr/local/bin/ffmpeg",      # Intel (Homebrew)
+        "/opt/local/bin/ffmpeg",      # MacPorts
+    ):
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
+def _impersonate():
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+
+        return ImpersonateTarget("chrome")
+    except Exception:
+        return None
+
+
 def download(video_id, cfg=None):
     """Baixa o melhor mp4 para a pasta sincronizada. Retorna o caminho final.
-    Idempotente: se o arquivo já existe, não rebaixa."""
+    Idempotente: se o arquivo já existe, não rebaixa.
+
+    Se houver ffmpeg, baixa a melhor faixa de vídeo+áudio e junta (qualidade
+    máxima). Sem ffmpeg, cai para um arquivo MP4 progressivo único (não precisa
+    de merge) — pior qualidade, mas funciona em qualquer máquina."""
     import yt_dlp
 
     cfg = cfg or load()
@@ -61,16 +92,39 @@ def download(video_id, cfg=None):
         return final_path
 
     url = v.get("url") or f"https://www.youtube.com/watch?v={video_id}"
+    ffmpeg = _ffmpeg_path()
+
     ydl_opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "merge_output_format": "mp4",
         "outtmpl": out_base + ".%(ext)s",
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
     }
+    imp = _impersonate()
+    if imp is not None:
+        ydl_opts["impersonate"] = imp
+
+    if ffmpeg:
+        ydl_opts["ffmpeg_location"] = ffmpeg
+        ydl_opts["format"] = (
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        )
+        ydl_opts["merge_output_format"] = "mp4"
+    else:
+        # progressivo: já vem com vídeo+áudio num único arquivo (sem merge)
+        ydl_opts["format"] = (
+            "best[ext=mp4][acodec!=none][vcodec!=none]/"
+            "best[acodec!=none][vcodec!=none]/best"
+        )
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+        info = ydl.extract_info(url, download=True)
+
+    # o arquivo final pode ter outra extensão se não houve merge
+    if not os.path.exists(final_path):
+        guess = ydl.prepare_filename(info)
+        if os.path.exists(guess):
+            final_path = guess
 
     store.set_flag(video_id, "downloaded", 1)
     return final_path

@@ -432,7 +432,20 @@
     }
     if (!a) { console.warn("api not ready"); return; }
     try {
-      if (action === "watch") { await a.watch(v.video_id); return; }
+      if (action === "watch") {
+        const btn = host.querySelector('[data-action="watch"]');
+        if (btn) { btn.textContent = "Baixando…"; btn.disabled = true; }
+        flash("Baixando o vídeo para assistir no player… pode levar um pouco.", 60000);
+        const r = await a.watch(v.video_id);
+        if (r && r.ok) { v.downloaded = 1; flash("Abrindo no player."); }
+        else { flash((r && r.error) || "Não foi possível baixar o vídeo."); }
+        if (btn) { btn.textContent = "Assistir"; btn.disabled = false; }
+        host.innerHTML = synthHtml(v);
+        host.querySelectorAll("[data-action]").forEach(b => {
+          b.onclick = (e) => { e.stopPropagation(); handleAction(b.dataset.action, v, host); };
+        });
+        return;
+      }
       if (action === "obsidian") { await a.save_obsidian(v.video_id); v.saved_obsidian = 1; }
       if (action === "anki")     { await a.save_anki(v.video_id);     v.saved_anki = 1; }
       if (action === "download") { await a.download(v.video_id);      v.downloaded = 1; }
