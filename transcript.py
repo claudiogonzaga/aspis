@@ -1,24 +1,26 @@
 """transcript.py — obtém a transcrição de um vídeo do YouTube.
 
-Usa youtube-transcript-api (legendas manuais ou autogeradas). Se não houver
-legenda, retorna {available: False} com elegância — o brain cai para
+Estratégia (em ordem):
+  1. yt-dlp: baixa a FAIXA DE LEGENDAS oficial do YouTube (manual ou
+     autogerada), em formato json3 (tem timestamps). É o caminho mais robusto
+     — não depende do endpoint que a youtube-transcript-api raspa (e que o
+     YouTube vem bloqueando por IP/rate-limit).
+  2. youtube-transcript-api: fallback, caso o yt-dlp não ache legenda.
+  3. Whisper (opcional, desligado por padrão): se NÃO houver legenda nenhuma e
+     o usuário tiver habilitado, baixa o áudio e transcreve localmente. Não vem
+     embutido (modelo + ffmpeg são pesados); ativa só se disponível.
+
+Se nada funcionar, retorna {available: False} — o brain cai para
 título+descrição. Zona cinzenta dos ToS do YouTube; uso pessoal apenas.
-
-Suporta tanto a API nova (1.x, baseada em instância: fetch/list) quanto a
-antiga (0.6.x, métodos estáticos), escolhendo automaticamente.
 """
-from youtube_transcript_api import YouTubeTranscriptApi
+import json
+import urllib.request
 
-try:  # nomes/posições mudam entre versões — degrade com elegância
-    from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
-except ImportError:
-    class TranscriptsDisabled(Exception):
-        pass
-
-    class NoTranscriptFound(Exception):
-        pass
-
-PREFERRED_LANGS = ["pt", "pt-BR", "en"]
+# pt primeiro (inclui variantes/orig), depois en
+PREFERRED_LANGS = [
+    "pt", "pt-BR", "pt-PT", "pt-orig",
+    "en", "en-US", "en-GB", "en-orig",
+]
 
 
 def _fmt_ts(seconds):
@@ -30,43 +32,192 @@ def _fmt_ts(seconds):
     return f"{m:d}:{s:02d}"
 
 
-def _snippet_fields(item):
-    """Extrai (text, start) de um item, seja dict (0.6.x) ou objeto (1.x)."""
-    if isinstance(item, dict):
-        return item.get("text", ""), item.get("start", 0)
-    return getattr(item, "text", ""), getattr(item, "start", 0)
+# --- 1) yt-dlp (faixa de legendas oficial) ---------------------------------
+def _pick_json3_url(track_list):
+    """De uma lista de formatos de uma legenda, devolve a URL do json3."""
+    if not track_list:
+        return None
+    for fmt in track_list:
+        if fmt.get("ext") == "json3" and fmt.get("url"):
+            return fmt["url"]
+    return None
 
 
-def _fetch_raw(video_id):
-    """Devolve um iterável de snippets, tentando a API nova e depois a antiga."""
-    # API 1.x: instância com .fetch()
-    if hasattr(YouTubeTranscriptApi, "fetch") or not hasattr(
-        YouTubeTranscriptApi, "get_transcript"
-    ):
-        ytt = YouTubeTranscriptApi()
-        return ytt.fetch(video_id, languages=PREFERRED_LANGS)
-    # API 0.6.x: método estático
-    return YouTubeTranscriptApi.get_transcript(video_id, languages=PREFERRED_LANGS)
+def _choose_track(subtitles, automatic):
+    """Escolhe a melhor legenda: manual nos idiomas preferidos, depois
+    autogerada nos preferidos, depois qualquer pt/en."""
+    for source in (subtitles, automatic):
+        if not source:
+            continue
+        for lang in PREFERRED_LANGS:
+            if lang in source:
+                url = _pick_json3_url(source[lang])
+                if url:
+                    return url
+        for lang, tracks in source.items():
+            if any(lang.startswith(p) for p in ("pt", "en")):
+                url = _pick_json3_url(tracks)
+                if url:
+                    return url
+    return None
 
 
-def get_transcript(video_id):
-    """Retorna {available, text, segments} onde segments é lista de
-    {text, start, ts}. Em ausência de legenda: {available: False, ...}."""
+def _parse_json3(data):
+    """json3 do YouTube → lista de segments {text, start, ts}."""
+    segments = []
+    for ev in data.get("events", []):
+        segs = ev.get("segs") or []
+        text = "".join(s.get("utf8", "") for s in segs).strip()
+        if not text:
+            continue
+        start = (ev.get("tStartMs", 0) or 0) / 1000.0
+        segments.append({"text": text, "start": start, "ts": _fmt_ts(start)})
+    return segments
+
+
+def _via_ytdlp(video_id):
     try:
-        raw = _fetch_raw(video_id)
-    except (TranscriptsDisabled, NoTranscriptFound):
-        return {"available": False, "text": None, "segments": []}
+        from yt_dlp import YoutubeDL
+
+        opts = {
+            "skip_download": True,
+            "quiet": True,
+            "no_warnings": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+        }
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(
+                f"https://www.youtube.com/watch?v={video_id}", download=False
+            )
+        url = _choose_track(
+            info.get("subtitles") or {}, info.get("automatic_captions") or {}
+        )
+        if not url:
+            return None
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+        segments = _parse_json3(data)
+        return segments or None
     except Exception:
-        # qualquer outra falha (rede, idioma indisponível, parsing): não quebre.
-        return {"available": False, "text": None, "segments": []}
+        return None
+
+
+# --- 2) youtube-transcript-api (fallback) ----------------------------------
+def _via_api(video_id):
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+    except Exception:
+        return None
+    try:
+        if hasattr(YouTubeTranscriptApi, "fetch") or not hasattr(
+            YouTubeTranscriptApi, "get_transcript"
+        ):
+            raw = YouTubeTranscriptApi().fetch(video_id, languages=PREFERRED_LANGS)
+        else:
+            raw = YouTubeTranscriptApi.get_transcript(video_id, languages=PREFERRED_LANGS)
+    except Exception:
+        return None
 
     segments = []
     for item in raw:
-        text, start = _snippet_fields(item)
-        segments.append({"text": text, "start": start, "ts": _fmt_ts(start)})
+        if isinstance(item, dict):
+            text, start = item.get("text", ""), item.get("start", 0)
+        else:
+            text, start = getattr(item, "text", ""), getattr(item, "start", 0)
+        if text:
+            segments.append({"text": text, "start": start, "ts": _fmt_ts(start)})
+    return segments or None
+
+
+# --- 3) Whisper (opcional, desligado por padrão) ----------------------------
+def _via_whisper(video_id, cfg):
+    """Reserva: baixa o áudio e transcreve com Whisper local. Só roda se o
+    usuário habilitar (config transcript.whisper.enabled) e as libs existirem.
+    Não vem embutido no .app (modelo + ffmpeg são pesados)."""
+    tcfg = (cfg or {}).get("transcript", {}).get("whisper", {})
+    if not tcfg.get("enabled"):
+        return None
+    try:
+        import os
+        import tempfile
+
+        from yt_dlp import YoutubeDL
+
+        try:
+            from faster_whisper import WhisperModel  # mais leve/rápido
+            backend = "faster"
+        except Exception:
+            import whisper  # openai-whisper
+            backend = "openai"
+
+        tmp = tempfile.mkdtemp(prefix="clipeo_wh_")
+        out = os.path.join(tmp, "%(id)s.%(ext)s")
+        opts = {
+            "skip_download": False,
+            "quiet": True,
+            "no_warnings": True,
+            "format": "bestaudio/best",
+            "outtmpl": out,
+            "postprocessors": [
+                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}
+            ],
+        }
+        with YoutubeDL(opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+        audio = os.path.join(tmp, f"{video_id}.mp3")
+        if not os.path.exists(audio):
+            return None
+
+        model_name = tcfg.get("model", "base")
+        segments = []
+        if backend == "faster":
+            model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            segs, _ = model.transcribe(audio)
+            for s in segs:
+                segments.append(
+                    {"text": s.text.strip(), "start": s.start, "ts": _fmt_ts(s.start)}
+                )
+        else:
+            model = whisper.load_model(model_name)
+            res = model.transcribe(audio)
+            for s in res.get("segments", []):
+                segments.append(
+                    {"text": s["text"].strip(), "start": s["start"], "ts": _fmt_ts(s["start"])}
+                )
+        return segments or None
+    except Exception:
+        return None
+
+
+# --- API pública ------------------------------------------------------------
+def get_transcript(video_id, cfg=None):
+    """Retorna {available, text, segments, source}. segments é lista de
+    {text, start, ts}. Em ausência total de legenda: {available: False, ...}."""
+    source = None
+    segments = _via_ytdlp(video_id)
+    if segments:
+        source = "yt-dlp"
+    if not segments:
+        segments = _via_api(video_id)
+        if segments:
+            source = "youtube-transcript-api"
+    if not segments:
+        segments = _via_whisper(video_id, cfg)
+        if segments:
+            source = "whisper"
+
+    if not segments:
+        return {"available": False, "text": None, "segments": [], "source": None}
 
     full_text = " ".join(s["text"] for s in segments).strip()
-    return {"available": bool(full_text), "text": full_text or None, "segments": segments}
+    return {
+        "available": bool(full_text),
+        "text": full_text or None,
+        "segments": segments,
+        "source": source,
+    }
 
 
 if __name__ == "__main__":
@@ -74,6 +225,6 @@ if __name__ == "__main__":
 
     vid = sys.argv[1] if len(sys.argv) > 1 else "dQw4w9WgXcQ"
     r = get_transcript(vid)
-    print(f"available={r['available']} segments={len(r['segments'])}")
+    print(f"available={r['available']} source={r.get('source')} segments={len(r['segments'])}")
     if r["text"]:
         print(r["text"][:300], "…")

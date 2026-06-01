@@ -57,7 +57,7 @@ def run(cfg=None, max_total=None):
             skipped += 1
             continue
         try:
-            tr = transcript_mod.get_transcript(vid)
+            tr = transcript_mod.get_transcript(vid, cfg)
             analysis = brain.analyze(v, tr, cfg)
             row = {
                 "video_id": vid,
