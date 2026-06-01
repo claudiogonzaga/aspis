@@ -13,6 +13,8 @@ import os
 
 from setuptools import setup
 
+import version  # fonte única da versão
+
 APP = ["app.py"]
 
 DATA_FILES = [
@@ -35,8 +37,8 @@ OPTIONS = {
         "CFBundleName": "Clipeo",
         "CFBundleDisplayName": "Clípeo",
         "CFBundleIdentifier": "com.clipeo.app",
-        "CFBundleVersion": "0.1.0",
-        "CFBundleShortVersionString": "0.1.0",
+        "CFBundleVersion": version.__version__,
+        "CFBundleShortVersionString": version.__version__,
         "CFBundleIconFile": "clipeo.icns",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
@@ -67,6 +69,7 @@ OPTIONS = {
     ],
     "includes": [
         "config", "store", "accounts", "keystore", "obsidian", "anki", "download",
+        "version", "updater",
         # pipeline embarcado para o botão Atualizar rodar dentro do app
         "youtube", "transcript", "brain", "routine",
         # módulos pontuais (dotted/soltos) — namespace google NÃO entra em packages

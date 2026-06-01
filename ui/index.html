@@ -279,6 +279,7 @@
   let ytStatus = { client_configured: false, channels: [], active: null };
   let geminiStatus = { configured: false, masked: "", provider: "gemini" };
   let whisperStatus = { model: "base", enabled: false, auto_on_block: true, models: [], downloaded: [] };
+  let updateStatus = {};   // {checking|error|current|latest|update_available|dmg_url}
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
@@ -421,6 +422,8 @@
     await refreshPilares();
     objDraft = pilares.map(p => ({ ...p }));
     renderPanel();
+    // verifica atualizações em segundo plano (não bloqueia a abertura)
+    checkUpdate();
   }
   function closeSettings() { document.getElementById("overlay").classList.remove("show"); }
 
@@ -462,10 +465,65 @@
     p.innerHTML =
       `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>
        <h2>Configurações</h2>` +
+      updateSectionHtml() +
       geminiSectionHtml() +
       objectivesSectionHtml() +
       whisperSectionHtml() +
       ytSectionHtml();
+  }
+
+  function updateSectionHtml() {
+    const u = updateStatus;
+    let body = "";
+    if (u.checking) {
+      body = `<div class="note">Verificando…</div>`;
+    } else if (u.error) {
+      body = `<div class="note err">${esc(u.error)}</div>
+        <div class="row-actions"><button class="primary" onclick="checkUpdate()">Tentar de novo</button></div>`;
+    } else if (u.update_available) {
+      body = `<div class="note ok">Nova versão disponível: <b>${esc(u.latest)}</b> (você tem ${esc(u.current)}).</div>
+        <div class="row-actions">
+          <button class="primary" id="do-update" onclick="installUpdate()">Atualizar agora</button>
+        </div>
+        <div class="note" id="update-note"></div>`;
+    } else if (u.current) {
+      body = `<div class="note ok">Você está na versão mais recente (${esc(u.current)}).</div>
+        <div class="row-actions"><button class="lnk" onclick="checkUpdate()">Verificar de novo</button></div>`;
+    } else {
+      body = `<div class="row-actions"><button class="primary" onclick="checkUpdate()">Buscar atualizações</button></div>`;
+    }
+    return `<div class="section"><div class="sec-title">Atualizações</div>${body}</div>`;
+  }
+
+  async function checkUpdate() {
+    const a = api();
+    updateStatus = { checking: true };
+    renderPanel();
+    try {
+      const r = await a.check_update();
+      updateStatus = r && r.ok ? r : { error: (r && r.error) || "Falha ao verificar." };
+    } catch (e) { updateStatus = { error: String(e) }; }
+    renderPanel();
+  }
+
+  async function installUpdate() {
+    const a = api();
+    const btn = document.getElementById("do-update");
+    const note = document.getElementById("update-note");
+    if (btn) { btn.disabled = true; btn.textContent = "Baixando e instalando…"; }
+    if (note) note.textContent = "Isto pode levar alguns minutos. O app vai reabrir sozinho.";
+    try {
+      const r = await a.install_update(updateStatus.dmg_url);
+      if (r && r.ok) {
+        if (note) { note.className = "note ok"; note.textContent = "Atualizado! Reabrindo o Clípeo…"; }
+      } else {
+        if (note) { note.className = "note err"; note.textContent = (r && r.error) || "Falha ao instalar."; }
+        if (btn) { btn.disabled = false; btn.textContent = "Atualizar agora"; }
+      }
+    } catch (e) {
+      if (note) { note.className = "note err"; note.textContent = String(e); }
+      if (btn) { btn.disabled = false; btn.textContent = "Atualizar agora"; }
+    }
   }
 
   const WHISPER_LABELS = {

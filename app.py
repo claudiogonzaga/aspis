@@ -192,6 +192,33 @@ class Api:
         keystore.set_key(env, "")
         return {"ok": True}
 
+    # --- atualizações (GitHub) ---
+    def check_update(self):
+        import updater
+
+        return updater.check()
+
+    def install_update(self, dmg_url):
+        import updater
+
+        r = updater.install(dmg_url)
+        if r.get("ok") and r.get("relaunch"):
+            # fecha o app atual logo após disparar a abertura do novo
+            def _quit():
+                import time
+
+                time.sleep(1.5)
+                try:
+                    webview.windows[0].destroy()
+                except Exception:
+                    pass
+                os._exit(0)
+
+            import threading
+
+            threading.Thread(target=_quit, daemon=True).start()
+        return r
+
     # --- Whisper (fallback de transcrição) ---
     def whisper_status(self):
         import config
