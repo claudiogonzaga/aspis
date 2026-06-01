@@ -129,24 +129,92 @@ def _load_prefs():
     return {}
 
 
-def get_threshold():
-    """Limiar de score efetivo: prefs do usuário tem prioridade sobre config.yaml."""
-    p = _load_prefs()
-    if "score_threshold" in p:
-        try:
-            return max(0, min(100, int(p["score_threshold"])))
-        except (TypeError, ValueError):
-            pass
-    return int(load().get("score_threshold", 60))
-
-
-def set_threshold(value):
-    p = _load_prefs()
-    p["score_threshold"] = max(0, min(100, int(value)))
+def _save_prefs(p):
     os.makedirs(USER_DIR, exist_ok=True)
     with open(USER_PREFS, "w", encoding="utf-8") as fh:
         json.dump(p, fh, ensure_ascii=False, indent=2)
-    return p["score_threshold"]
+
+
+# --- estrelas (0–5) ----------------------------------------------------------
+# Faixas de score → estrelas. Cada estrela exige um score mínimo.
+STAR_MIN_SCORE = {0: 0, 1: 20, 2: 40, 3: 60, 4: 80, 5: 95}
+
+
+def score_to_stars(score):
+    """Converte score 0–100 em 0–5 estrelas (faixas de 20, 5★ = 95+)."""
+    s = max(0, min(100, int(score or 0)))
+    stars = 0
+    for k in (1, 2, 3, 4, 5):
+        if s >= STAR_MIN_SCORE[k]:
+            stars = k
+    return stars
+
+
+def get_min_stars():
+    """Estrelas mínimas para um vídeo aparecer na lista (0–5)."""
+    p = _load_prefs()
+    if "min_stars" in p:
+        try:
+            return max(0, min(5, int(p["min_stars"])))
+        except (TypeError, ValueError):
+            pass
+    # default a partir do limiar legado (score_threshold) ou 3★
+    legacy = p.get("score_threshold", load().get("score_threshold", 60))
+    return score_to_stars(legacy)
+
+
+def set_min_stars(value):
+    p = _load_prefs()
+    p["min_stars"] = max(0, min(5, int(value)))
+    _save_prefs(p)
+    return p["min_stars"]
+
+
+def get_threshold():
+    """Limiar de SCORE efetivo (derivado das estrelas mínimas)."""
+    return STAR_MIN_SCORE[get_min_stars()]
+
+
+# --- período (exibição + janela de busca) -----------------------------------
+PERIODS = {"day": 36, "week": 24 * 7, "month": 24 * 30}  # horas de lookback
+
+
+def get_period():
+    p = _load_prefs().get("period", "day")
+    return p if p in PERIODS else "day"
+
+
+def set_period(value):
+    p = _load_prefs()
+    p["period"] = value if value in PERIODS else "day"
+    _save_prefs(p)
+    return p["period"]
+
+
+def period_lookback_hours():
+    return PERIODS[get_period()]
+
+
+# --- regras gerais da IA (texto livre, editável) ----------------------------
+DEFAULT_RULES = (
+    "Penalize sensacionalismo: rage bait, isca de engajamento, promessas vazias, "
+    "FOMO, CAPS, emojis de alarme — marque is_clickbait e reduza o score.\n"
+    "Priorize densidade de informação acionável e evidência sobre popularidade.\n"
+    "Vídeos de pura opinião/entretenimento, sem valor para os objetivos, vão para "
+    "'nenhum' com score baixo."
+)
+
+
+def get_rules():
+    p = _load_prefs()
+    return p.get("rules", DEFAULT_RULES)
+
+
+def set_rules(text):
+    p = _load_prefs()
+    p["rules"] = (text or "").strip() or DEFAULT_RULES
+    _save_prefs(p)
+    return p["rules"]
 
 
 # --- modelo do Whisper (fallback de transcrição), editável pelo usuário -----

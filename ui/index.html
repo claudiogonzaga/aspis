@@ -71,16 +71,24 @@
 
   .list { margin-top: 8px; }
   .row {
-    display: grid; grid-template-columns: 34px 1fr; column-gap: 14px;
+    display: grid; grid-template-columns: 58px 1fr; column-gap: 14px;
     padding: 16px 4px; border-top: 0.5px solid var(--border);
     cursor: pointer;
   }
   .list .row:last-child { border-bottom: 0.5px solid var(--border); }
   .row:hover { background: var(--hover); }
   .score {
-    font-family: var(--mono); font-size: 12px; color: var(--score);
-    text-align: right; padding-top: 1px;
+    text-align: right; padding-top: 3px;
   }
+  .stars { font-size: 11px; letter-spacing: 1px; color: #d8a13a; white-space: nowrap; }
+  .stars .star-off { color: var(--border); }
+  .period-seg { display: inline-flex; gap: 2px; }
+  .seg-btn {
+    font-family: var(--sans); font-size: 12px; color: var(--fg-tertiary);
+    background: none; border: none; cursor: pointer; padding: 1px 6px; border-radius: 6px;
+  }
+  .seg-btn:hover { color: var(--fg-secondary); }
+  .seg-btn.active { color: var(--fg); font-weight: 600; background: var(--hover); }
   .title { font-size: 16px; font-weight: 500; line-height: 1.35; }
   .subline {
     margin-top: 5px; font-size: 12.5px; color: var(--fg-secondary);
@@ -221,9 +229,12 @@
   .row.is-read .title { color: var(--fg-secondary); }
   .row.is-read .score { opacity: 0.55; }
   .chip-read { margin-left: auto; }
-  .thr-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-  .thr-row input[type=range] { flex: 1 1 auto; }
-  .thr-val { font-family: var(--mono); font-size: 12px; min-width: 2.2em; text-align: right; }
+  .thr-val { font-family: var(--mono); font-size: 12px; }
+  .star-row { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+  .star-pick { font-size: 22px; line-height: 1; background: none; border: none; cursor: pointer; color: var(--border); padding: 0 2px; }
+  .star-pick.on { color: #d8a13a; }
+  .star-row .thr-val { margin-left: 8px; color: var(--fg-secondary); }
+  .obj-q, .obj-n { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -240,6 +251,8 @@
       <span id="today"></span>
       <span class="dot">·</span>
       <span id="new-count">—</span>
+      <span class="dot">·</span>
+      <span class="period-seg" id="period-seg"></span>
     </div>
     <div class="chips" id="chips"></div>
   </header>
@@ -283,11 +296,13 @@
   let activeFilter = null;
   let expandedId = null;
   let showRead = false;   // mostrar também os marcados como lidos
+  let period = "day";     // day | week | month
   let ytStatus = { client_configured: false, channels: [], active: null };
   let geminiStatus = { configured: false, masked: "", provider: "gemini" };
   let whisperStatus = { model: "base", enabled: false, auto_on_block: true, models: [], downloaded: [] };
   let updateStatus = {};   // {checking|error|current|latest|update_available|dmg_url}
-  let threshold = 60;
+  let minStars = 3;
+  let rulesText = "";
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
@@ -324,12 +339,30 @@
     c.appendChild(r);
   }
 
+  function renderPeriod() {
+    const el = document.getElementById("period-seg");
+    if (!el) return;
+    const opts = [["day", "Dia"], ["week", "Semana"], ["month", "Mês"]];
+    el.innerHTML = opts.map(([k, lab]) =>
+      `<button class="seg-btn ${period === k ? "active" : ""}" data-p="${k}">${lab}</button>`
+    ).join("");
+    el.querySelectorAll("[data-p]").forEach(b => {
+      b.onclick = async () => {
+        period = b.dataset.p; expandedId = null;
+        try { await api().set_period(period); } catch (e) {}
+        load();
+      };
+    });
+  }
+
   function rowHtml(v) {
     const m = pillMeta[v.pillar] || pillMeta["nenhum"];
     const pill = `<span class="pill" style="background:${m.bg};color:${m.fg}">${esc(m.label)}</span>`;
     const cb = v.is_clickbait ? `<span class="clickbait-flag">· sensacionalista</span>` : "";
+    const n = v.stars || 0;
+    const stars = `<span class="stars" title="${v.stars}/5">${"★".repeat(n)}<span class="star-off">${"★".repeat(5 - n)}</span></span>`;
     return `
-      <div class="score">${v.score}</div>
+      <div class="score">${stars}</div>
       <div>
         <div class="title">${esc(v.neutral_title)}</div>
         <div class="subline">
@@ -442,7 +475,8 @@
     document.getElementById("overlay").classList.add("show");
     await refreshYtStatus();
     await refreshPilares();
-    try { threshold = (await api().get_threshold()).threshold; } catch (e) {}
+    try { const vp = await api().get_view_prefs(); minStars = vp.min_stars; period = vp.period; } catch (e) {}
+    try { rulesText = (await api().get_rules()).rules; } catch (e) {}
     objDraft = pilares.map(p => ({ ...p }));
     renderPanel();
     // verifica atualizações em segundo plano (não bloqueia a abertura)
@@ -490,37 +524,56 @@
        <h2>Configurações</h2>` +
       updateSectionHtml() +
       geminiSectionHtml() +
+      starsSectionHtml() +
       objectivesSectionHtml() +
-      thresholdSectionHtml() +
+      rulesSectionHtml() +
       whisperSectionHtml() +
       ytSectionHtml();
   }
 
-  function thresholdSectionHtml() {
+  function starsSectionHtml() {
+    const cur = minStars;
+    const star = (n) => `<button class="star-pick ${n <= cur ? "on" : ""}" onclick="setMinStars(${n})" title="${n}★">★</button>`;
     return `<div class="section">
-      <div class="sec-title">Limiar de exibição</div>
-      <div class="sub">Vídeos com alinhamento abaixo deste valor ficam ocultos da lista principal. Menor = mostra mais; maior = só os mais alinhados.</div>
-      <div class="thr-row">
-        <input type="range" min="0" max="100" step="5" value="${threshold}"
-               id="thr-range" oninput="onThrInput(this.value)" onchange="saveThreshold(this.value)">
-        <span class="thr-val" id="thr-val">${threshold}</span>
-      </div>
-      <div class="note" id="thr-note"></div>
+      <div class="sec-title">Mostrar a partir de</div>
+      <div class="sub">Só vídeos com pelo menos estas estrelas aparecem na lista. Menos estrelas = mostra mais.</div>
+      <div class="star-row">${[1,2,3,4,5].map(star).join("")}
+        <span class="thr-val">${cur}★+</span></div>
+      <div class="note" id="stars-note"></div>
     </div>`;
   }
 
-  function onThrInput(v) { document.getElementById("thr-val").textContent = v; }
-
-  async function saveThreshold(v) {
-    const a = api();
-    const note = document.getElementById("thr-note");
+  async function setMinStars(n) {
     try {
-      const r = await a.set_threshold(parseInt(v, 10));
-      threshold = r.threshold;
-      if (note) { note.className = "note ok"; note.textContent = "✓ limiar salvo."; }
+      const r = await api().set_min_stars(n);
+      minStars = r.min_stars;
+      renderPanel();
+      const note = document.getElementById("stars-note");
+      if (note) { note.className = "note ok"; note.textContent = "✓ salvo."; }
       load();
-    } catch (e) { if (note) { note.className = "note err"; note.textContent = String(e); } }
+    } catch (e) { console.error(e); }
   }
+
+  function rulesSectionHtml() {
+    return `<div class="section">
+      <div class="sec-title">Critérios da IA</div>
+      <div class="sub">Regras gerais que a IA segue ao avaliar e pontuar cada vídeo. Uma regra por linha.</div>
+      <textarea class="field" id="rules-text" style="min-height:120px">${esc(rulesText)}</textarea>
+      <div class="row-actions"><button class="primary" onclick="saveRules()">Salvar critérios</button></div>
+      <div class="note" id="rules-note"></div>
+    </div>`;
+  }
+
+  async function saveRules() {
+    const note = document.getElementById("rules-note");
+    note.className = "note"; note.textContent = "Salvando…";
+    try {
+      const r = await api().set_rules(document.getElementById("rules-text").value);
+      rulesText = r.rules;
+      note.className = "note ok"; note.textContent = "✓ critérios salvos. Clique ↻ Atualizar para reavaliar.";
+    } catch (e) { note.className = "note err"; note.textContent = String(e); }
+  }
+
 
   function updateSectionHtml() {
     const u = updateStatus;
@@ -690,12 +743,16 @@
           </select>
           <button class="lnk" onclick="removeObjective(${i})">remover</button>
         </div>
-        <textarea class="field obj-desc" placeholder="O que você QUER e o que NÃO quer ver neste objetivo."
+        <textarea class="field obj-desc" placeholder="Descrição do objetivo."
                   oninput="objField(${i}, 'descricao', this.value)">${esc(o.descricao || "")}</textarea>
+        <input class="inp obj-q" value="${esc(o.quero || "")}" placeholder="Quero ver: (separe por vírgula)"
+               oninput="objField(${i}, 'quero', this.value)">
+        <input class="inp obj-n" value="${esc(o.nao_quero || "")}" placeholder="Não quero ver: (separe por vírgula)"
+               oninput="objField(${i}, 'nao_quero', this.value)">
       </div>`).join("");
     return `<div class="section">
       <div class="sec-title">Objetivos</div>
-      <div class="sub">A IA julga cada vídeo contra estes objetivos; o peso (1–5, padrão 3) define a importância no ranqueamento.</div>
+      <div class="sub">A IA julga cada vídeo contra estes objetivos; o peso (1–5, padrão 3) define a importância no ranqueamento. "Quero/Não quero" afinam o que conta como alinhado.</div>
       ${rows}
       <div class="row-actions">
         <button class="lnk" onclick="addObjective()">+ adicionar objetivo</button>
@@ -706,7 +763,7 @@
   }
 
   function objField(i, k, v) { if (objDraft[i]) objDraft[i][k] = v; }
-  function addObjective() { objDraft.push({ id: "", nome: "", descricao: "", peso: 3 }); renderPanel(); }
+  function addObjective() { objDraft.push({ id: "", nome: "", descricao: "", peso: 3, quero: "", nao_quero: "" }); renderPanel(); }
   function removeObjective(i) { objDraft.splice(i, 1); renderPanel(); }
   async function saveObjectives() {
     const a = api();
@@ -805,10 +862,12 @@
 
   async function load() {
     renderChips();
+    renderPeriod();
     const a = api();
     const list = document.getElementById("list");
     if (!a) { list.innerHTML = `<div class="empty">Carregando…</div>`; return; }
 
+    try { const vp = await a.get_view_prefs(); period = vp.period; renderPeriod(); } catch (e) {}
     await refreshYtStatus();
     await refreshPilares();
     document.getElementById("today").textContent = fmtDate(new Date());

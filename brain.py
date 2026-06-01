@@ -24,8 +24,7 @@ Regras:
 - Classifique o vídeo no pilar mais alinhado, ou "nenhum" se não servir a nenhum.
 - Dê um score 0–100 de alinhamento aos objetivos do usuário (quanto realmente \
 entrega de valor para os pilares, não quão popular é).
-- Penalize sensacionalismo: rage bait, isca de engajamento, promessas vazias, \
-FOMO, CAPS, emojis de alarme. Nesses casos marque is_clickbait=true e reduza o score.
+{regras_usuario}
 - neutral_title: reescreva o título para algo neutro e informativo (o que o vídeo \
 realmente entrega), SEM CAPS, SEM emoji, SEM isca. Sentence case.
 - resumo: 2 a 4 frases.
@@ -67,7 +66,11 @@ def _pillars_block(pilares):
 
 def _system_text(cfg):
     import config
-    return SYSTEM_RULES + "\n\n" + _pillars_block(config.get_pilares())
+    # injeta as regras editáveis do usuário (cada linha vira um marcador)
+    regras = config.get_rules().strip()
+    regras_fmt = "\n".join("- " + ln.strip() for ln in regras.splitlines() if ln.strip())
+    head = SYSTEM_RULES.replace("{regras_usuario}", regras_fmt)
+    return head + "\n\n" + _pillars_block(config.get_pilares())
 
 
 def _build_user_message(video, transcript, cfg):

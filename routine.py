@@ -18,14 +18,20 @@ from config import load
 
 
 def _since(cfg):
+    # janela de busca = a do período escolhido nas Configurações (dia/semana/mês),
+    # mas nunca menor que o último run (evita reprocessar tudo à toa).
+    import config
+
+    hours = config.period_lookback_hours()
+    floor = datetime.now(timezone.utc) - timedelta(hours=hours)
     last = store.get_meta("last_run")
     if last:
         try:
-            return datetime.fromisoformat(last)
+            last_dt = datetime.fromisoformat(last)
+            return min(last_dt, floor)  # o que cobrir MAIS tempo
         except ValueError:
             pass
-    hours = cfg.get("lookback_hours", 36)
-    return datetime.now(timezone.utc) - timedelta(hours=hours)
+    return floor
 
 
 def run(cfg=None, max_total=None):

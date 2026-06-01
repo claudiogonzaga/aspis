@@ -32,40 +32,80 @@ class Api:
 
     @property
     def threshold(self):
-        # lido dinamicamente: reflete ajustes feitos nas Configurações
+        # derivado das estrelas mínimas escolhidas nas Configurações
         import config
 
         return config.get_threshold()
 
-    def get_threshold(self):
-        import config
-
-        return {"threshold": config.get_threshold()}
-
-    def set_threshold(self, value):
-        import config
-
-        return {"ok": True, "threshold": config.set_threshold(value)}
-
     # --- leitura ---
+    def _since_iso(self):
+        import config
+        from datetime import datetime, timedelta, timezone
+
+        h = config.period_lookback_hours()
+        return (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat()
+
+    def _decorate(self, videos):
+        """Adiciona 'stars' (0–5) a cada vídeo."""
+        import config
+
+        for v in videos:
+            v["stars"] = config.score_to_stars(v.get("score", 0))
+        return videos
+
     def get_videos(self, pillar=None, include_read=False):
-        return store.get_videos(
-            filter_pillar=pillar, min_score=self.threshold, include_read=include_read
+        vids = store.get_videos(
+            filter_pillar=pillar, min_score=self.threshold,
+            include_read=include_read, since_iso=self._since_iso(),
         )
+        return self._decorate(vids)
 
     def get_synthesis(self, video_id):
-        return store.get_video(video_id)
+        v = store.get_video(video_id)
+        if v:
+            import config
+            v["stars"] = config.score_to_stars(v.get("score", 0))
+        return v
 
     def new_count(self):
-        # "novos" = acima do limiar e ainda não lidos
-        return len(store.get_videos(min_score=self.threshold, include_read=False))
+        # "novos" = acima do limiar, não lidos, dentro do período
+        return len(store.get_videos(
+            min_score=self.threshold, include_read=False, since_iso=self._since_iso()))
 
     def read_count(self):
-        return store.count_read(self.threshold)
+        return len(store.get_videos(
+            min_score=self.threshold, include_read=True, since_iso=self._since_iso())) \
+            - self.new_count()
 
     def set_read(self, video_id, value=1):
         store.set_flag(video_id, "read", int(value))
         return {"ok": True}
+
+    # --- estrelas / período / regras (Configurações) ---
+    def get_view_prefs(self):
+        import config
+
+        return {"min_stars": config.get_min_stars(), "period": config.get_period()}
+
+    def set_min_stars(self, value):
+        import config
+
+        return {"ok": True, "min_stars": config.set_min_stars(value)}
+
+    def set_period(self, value):
+        import config
+
+        return {"ok": True, "period": config.set_period(value)}
+
+    def get_rules(self):
+        import config
+
+        return {"rules": config.get_rules()}
+
+    def set_rules(self, text):
+        import config
+
+        return {"ok": True, "rules": config.set_rules(text)}
 
     def refresh(self, max_total=25):
         """Botão Atualizar: roda o pipeline na hora (busca novos → sintetiza →
@@ -284,7 +324,9 @@ class Api:
 
         return [
             {"id": k, "nome": p.get("nome", k),
-             "descricao": p.get("descricao", ""), "peso": p.get("peso", 3)}
+             "descricao": p.get("descricao", ""), "peso": p.get("peso", 3),
+             "quero": ", ".join(p.get("quero", []) or []),
+             "nao_quero": ", ".join(p.get("nao_quero", []) or [])}
             for k, p in config.get_pilares().items()
         ]
 
@@ -315,11 +357,21 @@ class Api:
             except (TypeError, ValueError):
                 peso = 3
             old = prev.get(it.get("id", ""), {})
+
+            def _list(field):
+                # aceita string "a, b, c" (da UI) ou lista; senão preserva antiga
+                val = it.get(field, None)
+                if isinstance(val, str):
+                    return [s.strip() for s in val.split(",") if s.strip()]
+                if isinstance(val, list):
+                    return val
+                return old.get(field, [])
+
             out[key] = {
                 "nome": nome,
                 "descricao": (it.get("descricao") or "").strip(),
-                "quero": old.get("quero", []),
-                "nao_quero": old.get("nao_quero", []),
+                "quero": _list("quero"),
+                "nao_quero": _list("nao_quero"),
                 "peso": max(1, min(5, peso)),
             }
         if not out:

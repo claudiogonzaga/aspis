@@ -95,9 +95,11 @@ def upsert_video(v):
         conn.execute(sql, [v.get(c) for c in cols])
 
 
-def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False):
+def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False,
+               since_iso=None):
     """Lista vídeos acima do limiar, ordenados por score desc.
-    `day` (YYYY-MM-DD) filtra por published_at, se informado.
+    `day` (YYYY-MM-DD) filtra por published_at exato, se informado.
+    `since_iso` (ISO) filtra published_at >= since (janela do período).
     `include_read=False` (padrão) oculta os marcados como lidos."""
     q = "SELECT * FROM videos WHERE score >= ?"
     args = [min_score]
@@ -109,6 +111,9 @@ def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False):
     if day:
         q += " AND substr(published_at, 1, 10) = ?"
         args.append(day)
+    if since_iso:
+        q += " AND published_at >= ?"
+        args.append(since_iso)
     q += " ORDER BY score DESC, published_at DESC"
     with _connect() as conn:
         rows = conn.execute(q, args).fetchall()
