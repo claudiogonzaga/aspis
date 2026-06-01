@@ -427,6 +427,7 @@
           ${b("saved_obsidian", "Obsidian", "✓ Obsidian", "obsidian")}
           ${b("saved_anki", "Anki", "✓ Anki", "anki")}
           ${b("downloaded", "Baixar", "✓ Baixado", "download")}
+          ${b("sent_android", "Enviar p/ Android", "✓ No Android", "android")}
           ${b("read", "Marcar lido", "✓ Lido", "read")}
           <button class="reveal" data-action="reveal">título original</button>
         </div>
@@ -470,6 +471,19 @@
         if (r && r.ok) { v.downloaded = 1; flash("Abrindo no player."); }
         else { flash((r && r.error) || "Não foi possível baixar o vídeo."); }
         if (btn) { btn.textContent = "Assistir"; btn.disabled = false; }
+        host.innerHTML = synthHtml(v);
+        host.querySelectorAll("[data-action]").forEach(b => {
+          b.onclick = (e) => { e.stopPropagation(); handleAction(b.dataset.action, v, host); };
+        });
+        return;
+      }
+      if (action === "android") {
+        const btn = host.querySelector('[data-action="android"]');
+        if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
+        flash("Preparando o vídeo para o Android (baixa se necessário)…", 60000);
+        const r = await a.send_android(v.video_id);
+        if (r && r.ok) { v.sent_android = 1; flash("Pronto — na pasta sincronizada com o Android."); }
+        else { flash((r && r.error) || "Não foi possível enviar."); }
         host.innerHTML = synthHtml(v);
         host.querySelectorAll("[data-action]").forEach(b => {
           b.onclick = (e) => { e.stopPropagation(); handleAction(b.dataset.action, v, host); };

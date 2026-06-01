@@ -199,6 +199,25 @@ class Api:
                 msg = "O YouTube limitou os downloads agora (tente mais tarde)."
             return {"ok": False, "error": msg}
 
+    def send_android(self, video_id):
+        """Copia o vídeo para a pasta sincronizada com o Android (baixa se
+        preciso). Erro legível em vez de exceção silenciosa."""
+        try:
+            import download as dl
+        except ImportError:
+            return {"ok": False, "error": "Módulo de download indisponível."}
+        try:
+            dest = dl.send_to_android(video_id, self.cfg)
+            store.set_flag(video_id, "sent_android", 1)
+            return {"ok": True, "path": dest}
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            if "ffmpeg" in msg.lower():
+                msg = "Falta o ffmpeg para baixar o vídeo. Instale: brew install ffmpeg"
+            elif "429" in msg or "Too Many Requests" in msg:
+                msg = "O YouTube limitou os downloads agora (tente mais tarde)."
+            return {"ok": False, "error": msg}
+
     def set_feedback(self, video_id, value):
         store.set_flag(video_id, "feedback", int(value))
         return {"ok": True}

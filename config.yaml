@@ -63,7 +63,10 @@ anki:
   deck: "Clípeo"
 
 download:
-  folder: "~/Clipeo/Downloads"       # pasta sincronizada (Syncthing/Drive)
+  folder: "~/Clipeo/Downloads"       # onde o app baixa os vídeos
+  # Pasta observada pelo Syncthing/Drive para enviar ao Android. O botão
+  # "Enviar p/ Android" copia o .mp4 para cá. Default: ~/Clipeo/ParaAndroid.
+  android_folder: "~/Clipeo/ParaAndroid"
 
 transcript:
   # Legendas via yt-dlp (json3/vtt, com impersonation curl_cffi); fallback

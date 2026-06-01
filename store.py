@@ -24,14 +24,15 @@ CREATE TABLE IF NOT EXISTS videos (
     saved_obsidian INTEGER DEFAULT 0,
     saved_anki INTEGER DEFAULT 0,
     downloaded INTEGER DEFAULT 0,
-    read INTEGER DEFAULT 0
+    read INTEGER DEFAULT 0,
+    sent_android INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 # Colunas que viajam como JSON (lista/objeto) entre o banco e o resto do app.
 _JSON_FIELDS = ("pontos_chave", "fatos", "citacoes")
-_FLAGS = ("saved_obsidian", "saved_anki", "downloaded", "read")
+_FLAGS = ("saved_obsidian", "saved_anki", "downloaded", "read", "sent_android")
 
 
 def _connect():
@@ -44,10 +45,12 @@ def init():
     """Cria o schema se ainda não existir. Seguro chamar sempre."""
     with _connect() as conn:
         conn.executescript(SCHEMA)
-        # migração: bancos antigos não têm a coluna 'read'
+        # migração: colunas adicionadas depois (bancos antigos)
         cols = {r[1] for r in conn.execute("PRAGMA table_info(videos)")}
         if "read" not in cols:
             conn.execute("ALTER TABLE videos ADD COLUMN read INTEGER DEFAULT 0")
+        if "sent_android" not in cols:
+            conn.execute("ALTER TABLE videos ADD COLUMN sent_android INTEGER DEFAULT 0")
 
 
 def now_iso():

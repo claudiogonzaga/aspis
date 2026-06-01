@@ -24,6 +24,39 @@ def _folder(cfg):
     return folder
 
 
+def _android_folder(cfg):
+    """Pasta sincronizada com o Android (Syncthing/Drive). Configurável via
+    download.android_folder; default = subpasta 'ParaAndroid' ao lado dos
+    downloads."""
+    dl = (cfg or {}).get("download", {})
+    folder = dl.get("android_folder")
+    if folder:
+        folder = expand(folder)
+    else:
+        folder = os.path.join(os.path.dirname(_folder(cfg)), "ParaAndroid")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def send_to_android(video_id, cfg=None):
+    """Copia o .mp4 do vídeo para a pasta sincronizada com o Android. Baixa
+    antes, se necessário. Retorna o caminho de destino."""
+    import shutil
+
+    cfg = cfg or load()
+    src = local_path(video_id, cfg)
+    if not os.path.exists(src):
+        src = download(video_id, cfg)  # caminho real (pode não ser .mp4)
+    if not src or not os.path.exists(src):
+        raise RuntimeError("não foi possível obter o arquivo do vídeo")
+    dest_dir = _android_folder(cfg)
+    dest = os.path.join(dest_dir, os.path.basename(src))
+    if os.path.abspath(src) != os.path.abspath(dest) and not os.path.exists(dest):
+        shutil.copy2(src, dest)
+    store.set_flag(video_id, "sent_android", 1)
+    return dest
+
+
 def _basename(cfg, v):
     return f"{_sanitize(v['neutral_title'])} [{v['video_id']}]"
 
