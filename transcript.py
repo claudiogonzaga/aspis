@@ -76,32 +76,61 @@ def _parse_json3(data):
 
 
 def _via_ytdlp(video_id):
+    """Deixa o PRÓPRIO yt-dlp baixar o arquivo de legenda (json3) para uma pasta
+    temporária e então lê. Baixar a URL na mão falha: o YouTube agora exige um
+    token (po_token) nessas URLs, que o yt-dlp resolve internamente."""
+    import glob
+    import os
+    import tempfile
+
     try:
         from yt_dlp import YoutubeDL
-
-        opts = {
-            "skip_download": True,
-            "quiet": True,
-            "no_warnings": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-        }
-        with YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(
-                f"https://www.youtube.com/watch?v={video_id}", download=False
-            )
-        url = _choose_track(
-            info.get("subtitles") or {}, info.get("automatic_captions") or {}
-        )
-        if not url:
-            return None
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8", "replace"))
-        segments = _parse_json3(data)
-        return segments or None
     except Exception:
         return None
+
+    tmp = tempfile.mkdtemp(prefix="clipeo_sub_")
+    opts = {
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": PREFERRED_LANGS + ["pt.*", "en.*"],
+        "subtitlesformat": "json3",
+        "outtmpl": os.path.join(tmp, "%(id)s.%(ext)s"),
+    }
+    try:
+        with YoutubeDL(opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+    except Exception:
+        pass  # mesmo com erro parcial, pode ter escrito um arquivo
+
+    try:
+        files = sorted(glob.glob(os.path.join(tmp, "*.json3")))
+        # prioriza idioma preferido pela ordem do nome do arquivo
+        def rank(path):
+            base = os.path.basename(path)
+            for i, lang in enumerate(PREFERRED_LANGS):
+                if f".{lang}." in base:
+                    return i
+            return len(PREFERRED_LANGS)
+        for path in sorted(files, key=rank):
+            if os.path.getsize(path) < 10:
+                continue
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                data = json.load(fh)
+            segments = _parse_json3(data)
+            if segments:
+                return segments
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+        except Exception:
+            pass
 
 
 # --- 2) youtube-transcript-api (fallback) ----------------------------------
