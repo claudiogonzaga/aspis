@@ -111,7 +111,7 @@ def _via_ytdlp(video_id):
     except Exception:
         return None
 
-    tmp = tempfile.mkdtemp(prefix="clipeo_sub_")
+    tmp = tempfile.mkdtemp(prefix="aspis_sub_")
     opts = {
         **_ydl_opts_base(),
         "skip_download": True,
@@ -220,7 +220,7 @@ def _via_whisper(video_id, cfg):
     """Reserva: baixa o áudio e transcreve com Whisper local. Só roda se o
     usuário habilitar (config transcript.whisper.enabled) e as libs existirem.
     Não vem embutido no .app (modelo + ffmpeg são pesados)."""
-    # Lê a config efetiva do Whisper (overlay do usuário em ~/.clipeo/whisper.json
+    # Lê a config efetiva do Whisper (overlay do usuário em ~/.aspis/whisper.json
     # tem prioridade sobre o config.yaml).
     try:
         import config
@@ -245,7 +245,7 @@ def _via_whisper(video_id, cfg):
             import whisper  # openai-whisper
             backend = "openai"
 
-        tmp = tempfile.mkdtemp(prefix="clipeo_wh_")
+        tmp = tempfile.mkdtemp(prefix="aspis_wh_")
         out = os.path.join(tmp, "%(id)s.%(ext)s")
         opts = {
             **_ydl_opts_base(),

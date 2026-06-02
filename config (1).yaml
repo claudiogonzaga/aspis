@@ -1,0 +1,54 @@
+# Escudo de Perseu — configuração
+# Edite este arquivo. Segredos (chaves de API) vêm de variáveis de ambiente,
+# nunca daqui. client_secret.json / token.json ficam fora do repositório.
+
+pilares:
+  saude:
+    nome: "Saúde mental e física"
+    descricao: "Saúde baseada em evidência: sono, treino de força, nutrição sustentável, ansiedade, foco."
+    quero: ["protocolos acionáveis", "estudos", "hábitos sustentáveis"]
+    nao_quero: ["dietas milagrosas", "biohacking sem evidência", "fitspiration"]
+  investimento:
+    nome: "Decisões acertadas em investimento"
+    descricao: "Decisões de longo prazo, alocação, gestão de risco, sobriedade."
+    quero: ["frameworks", "dados macro", "análise sóbria"]
+    nao_quero: ["pump de cripto", "day-trade hype", "FOMO", "sinais de compra"]
+  paternidade:
+    nome: "Ser um bom pai"
+    descricao: "Pai presente e melhor: desenvolvimento infantil, disciplina positiva, equilíbrio."
+    quero: ["psicologia do desenvolvimento", "atividades", "comunicação"]
+    nao_quero: ["culpa parental", "comparação", "prescrições rígidas"]
+
+# Vídeos abaixo deste score ficam ocultos da lista (mas contam no rodapé).
+score_threshold: 60
+
+# Janela de busca da rotina (horas para trás a partir do last_run).
+lookback_hours: 36
+
+# Limite de vídeos novos considerados por canal por execução.
+max_videos_per_channel: 8
+
+llm:
+  provider: anthropic
+  model: "claude-3-5-haiku-latest"   # string exata do modelo; troque conforme preferir
+  api_key_env: ANTHROPIC_API_KEY     # lido de variável de ambiente
+  max_transcript_chars: 14000        # corta transcrições muito longas para conter custo
+
+youtube:
+  client_secret_path: "~/.escudo/client_secret.json"
+  token_path: "~/.escudo/token.json"
+  # Alternativa sem OAuth: liste channel_ids manualmente e use uma API key.
+  # Se 'channels_manuais' estiver preenchido, o OAuth de inscrições é ignorado.
+  channels_manuais: []               # ex.: ["UCxxxx", "UCyyyy"]
+  api_key_env: YOUTUBE_API_KEY       # usado só no modo manual (sem OAuth)
+
+obsidian:
+  vault_path: "~/Obsidian/MeuVault"
+  daily_notes_folder: "Daily"
+
+anki:
+  enabled: true
+  deck: "Escudo de Perseu"
+
+download:
+  folder: "~/Escudo/Downloads"       # pasta sincronizada (Syncthing/Drive)

@@ -1,4 +1,4 @@
-"""updater.py — verifica e instala atualizações do Clípeo a partir do GitHub.
+"""updater.py — verifica e instala atualizações do Aspis a partir do GitHub.
 
 Segurança: o updater só consulta e baixa do repositório OFICIAL (definido em
 version.py), sempre por HTTPS. Nunca segue URLs vindas de outro lugar.
@@ -42,7 +42,7 @@ def _http_json(url):
         url,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": f"Clipeo/{version.__version__}",
+            "User-Agent": f"Aspis/{version.__version__}",
         },
     )
     ctx = ssl.create_default_context()
@@ -84,15 +84,15 @@ def check():
 def _download(url, dest):
     if not _DMG_HOST_RE.match(url):
         raise ValueError("URL de download não confiável (fora do GitHub).")
-    req = urllib.request.Request(url, headers={"User-Agent": f"Clipeo/{version.__version__}"})
+    req = urllib.request.Request(url, headers={"User-Agent": f"Aspis/{version.__version__}"})
     ctx = ssl.create_default_context()
     with urllib.request.urlopen(req, timeout=120, context=ctx) as resp, open(dest, "wb") as fh:
         shutil.copyfileobj(resp, fh)
 
 
 def _current_app_path():
-    """Caminho do .app em execução (…/Clipeo.app)."""
-    # RESOURCEPATH = …/Clipeo.app/Contents/Resources
+    """Caminho do .app em execução (…/Aspis.app)."""
+    # RESOURCEPATH = …/Aspis.app/Contents/Resources
     res = os.environ.get("RESOURCEPATH")
     if res:
         app = os.path.dirname(os.path.dirname(res))
@@ -111,7 +111,7 @@ def install(dmg_url):
     if not dmg_url or not _DMG_HOST_RE.match(dmg_url):
         return {"ok": False, "error": "URL de atualização inválida."}
 
-    tmp = tempfile.mkdtemp(prefix="clipeo_upd_")
+    tmp = tempfile.mkdtemp(prefix="aspis_upd_")
     dmg = os.path.join(tmp, "update.dmg")
     mount = os.path.join(tmp, "mnt")
     os.makedirs(mount, exist_ok=True)
@@ -141,7 +141,7 @@ def install(dmg_url):
                     "ok": False,
                     "needs_manual": True,
                     "error": "Não foi possível escrever em /Aplicativos automaticamente. "
-                             "Abra o .dmg e arraste o Clípeo para Aplicativos.",
+                             "Abra o .dmg e arraste o Aspis para Aplicativos.",
                 }
 
             if os.path.exists(dest):

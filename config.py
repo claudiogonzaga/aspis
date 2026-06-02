@@ -3,11 +3,11 @@
 Lê config.yaml e expõe um dicionário simples, expandindo ~ em caminhos.
 
 Locais (procurados nesta ordem):
-  1. ~/.clipeo/config.yaml      → config "de produção", compartilhada entre o
+  1. ~/.aspis/config.yaml      → config "de produção", compartilhada entre o
                                    app empacotado (.app) e a rotina do launchd.
   2. config.yaml ao lado deste arquivo → template versionado no repositório.
 
-O banco SQLite e o estado ficam SEMPRE em ~/.clipeo/clipeo.db, para que o .app
+O banco SQLite e o estado ficam SEMPRE em ~/.aspis/aspis.db, para que o .app
 (que só lê) e a rotina (que escreve) enxerguem o mesmo dado, não importa de onde
 cada um seja executado.
 """
@@ -21,9 +21,9 @@ import yaml
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUNDLED_CONFIG = os.path.join(HERE, "config.yaml")
 
-USER_DIR = os.path.expanduser("~/.clipeo")
+USER_DIR = os.path.expanduser("~/.aspis")
 USER_CONFIG = os.path.join(USER_DIR, "config.yaml")
-USER_DB = os.path.join(USER_DIR, "clipeo.db")
+USER_DB = os.path.join(USER_DIR, "aspis.db")
 
 
 def expand(path):
@@ -50,7 +50,7 @@ def _template_candidates():
 
 
 def config_path():
-    """Caminho efetivo da config. Se não houver uma em ~/.clipeo, semeia a
+    """Caminho efetivo da config. Se não houver uma em ~/.aspis, semeia a
     partir de um template (sem sobrescrever nada)."""
     if os.path.exists(USER_CONFIG):
         return USER_CONFIG
@@ -62,7 +62,7 @@ def config_path():
                 return USER_CONFIG
             except OSError:
                 return template  # fallback: usa o template diretamente
-    raise FileNotFoundError("config.yaml não encontrado (nem em ~/.clipeo nem no projeto)")
+    raise FileNotFoundError("config.yaml não encontrado (nem em ~/.aspis nem no projeto)")
 
 
 @lru_cache(maxsize=1)
@@ -72,7 +72,7 @@ def load():
 
 
 def db_path():
-    """SQLite compartilhado em ~/.clipeo/clipeo.db."""
+    """SQLite compartilhado em ~/.aspis/aspis.db."""
     os.makedirs(USER_DIR, exist_ok=True)
     return USER_DB
 
@@ -97,7 +97,7 @@ def _with_peso(pilares):
 
 
 def get_pilares():
-    """Pilares efetivos: ~/.clipeo/pilares.json se existir; senão os do
+    """Pilares efetivos: ~/.aspis/pilares.json se existir; senão os do
     config.yaml. Sempre com 'peso' normalizado."""
     if os.path.exists(USER_PILARES):
         try:
@@ -109,7 +109,7 @@ def get_pilares():
 
 
 def save_pilares(pilares):
-    """Persiste os objetivos editados pelo usuário em ~/.clipeo/pilares.json."""
+    """Persiste os objetivos editados pelo usuário em ~/.aspis/pilares.json."""
     os.makedirs(USER_DIR, exist_ok=True)
     with open(USER_PILARES, "w", encoding="utf-8") as fh:
         json.dump(_with_peso(pilares), fh, ensure_ascii=False, indent=2)
@@ -223,7 +223,7 @@ WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
 
 
 def get_whisper():
-    """Config efetiva do Whisper: ~/.clipeo/whisper.json se existir; senão a do
+    """Config efetiva do Whisper: ~/.aspis/whisper.json se existir; senão a do
     config.yaml (transcript.whisper). Garante chaves model/enabled/auto_on_block."""
     base = (load().get("transcript", {}) or {}).get("whisper", {}) or {}
     cfg = {

@@ -5,7 +5,7 @@
 # "a sealed resource is missing or invalid" — que o Gatekeeper, sob
 # quarentena, mostra como "está danificado".
 #
-# Uso: ./assets/sign_app.sh "dist/Clípeo.app"
+# Uso: ./assets/sign_app.sh "dist/Aspis.app"
 set -euo pipefail
 
 APP="${1:?uso: sign_app.sh <caminho-do-.app>}"

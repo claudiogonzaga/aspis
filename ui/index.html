@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Clipeo</title>
+<title>Aspis</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -248,7 +248,7 @@
 <div class="wrap">
   <header>
     <div class="topbar">
-      <div class="wordmark">Clipeo</div>
+      <div class="wordmark">Aspis</div>
       <div class="top-actions">
         <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
         <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
@@ -422,11 +422,11 @@
         ${points ? `<ul class="points">${points}</ul>` : ""}
         ${metaLine}
         <div class="actions">
-          <button class="btn" data-action="watch" title="Baixa o vídeo e abre no player do seu Mac (não abre o YouTube). Fica salvo em ~/Clipeo/Downloads.">Assistir</button>
+          <button class="btn" data-action="watch" title="Baixa o vídeo e abre no player do seu Mac (não abre o YouTube). Fica salvo em ~/Aspis/Downloads.">Assistir</button>
           ${b("saved_obsidian", "Obsidian", "✓ Obsidian", "obsidian", "Salva a síntese (resumo + pontos-chave) como nota no seu vault do Obsidian.")}
           ${b("saved_anki", "Anki", "✓ Anki", "anki", "Cria cards no Anki a partir dos fatos memorizáveis deste vídeo.")}
-          ${b("downloaded", "Baixar", "✓ Baixado", "download", "Baixa o vídeo em MP4 para ~/Clipeo/Downloads (para assistir offline).")}
-          ${b("sent_android", "Enviar p/ Android", "✓ No Android", "android", "Baixa (se preciso) e copia o MP4 para ~/Clipeo/ParaAndroid. Aponte o Syncthing para essa pasta e o vídeo aparece no celular.")}
+          ${b("downloaded", "Baixar", "✓ Baixado", "download", "Baixa o vídeo em MP4 para ~/Aspis/Downloads (para assistir offline).")}
+          ${b("sent_android", "Enviar p/ Android", "✓ No Android", "android", "Baixa (se preciso) e copia o MP4 para ~/Aspis/ParaAndroid. Aponte o Syncthing para essa pasta e o vídeo aparece no celular.")}
           ${b("read", "Marcar lido", "✓ Lido", "read", "Marca como lido: some da lista principal (volta com o filtro 'Mostrar lidos').")}
           <button class="reveal" data-action="reveal" title="Mostra o título original (sensacionalista) do YouTube, antes da neutralização.">título original</button>
         </div>
@@ -482,7 +482,7 @@
         if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
         flash("Preparando o vídeo para o Android (baixa se necessário)…", 60000);
         const r = await a.send_android(v.video_id);
-        if (r && r.ok) { v.sent_android = 1; flash("✓ Copiado para ~/Clipeo/ParaAndroid. Com o Syncthing ativo, aparece no celular sozinho.", 7000); }
+        if (r && r.ok) { v.sent_android = 1; flash("✓ Copiado para ~/Aspis/ParaAndroid. Com o Syncthing ativo, aparece no celular sozinho.", 7000); }
         else { flash((r && r.error) || "Não foi possível enviar."); }
         host.innerHTML = synthHtml(v);
         host.querySelectorAll("[data-action]").forEach(b => {
@@ -675,7 +675,7 @@
     try {
       const r = await a.install_update(updateStatus.dmg_url);
       if (r && r.ok) {
-        if (note) { note.className = "note ok"; note.textContent = "Atualizado! Reabrindo o Clipeo…"; }
+        if (note) { note.className = "note ok"; note.textContent = "Atualizado! Reabrindo o Aspis…"; }
       } else {
         if (note) { note.className = "note err"; note.textContent = (r && r.error) || "Falha ao instalar."; }
         if (btn) { btn.disabled = false; btn.textContent = "Atualizar agora"; }
@@ -738,7 +738,7 @@
     const ph = g.configured ? `chave salva (${esc(g.masked)}) — cole para trocar` : "AIza…";
     return `<div class="section">
       <div class="sec-title">Chave do Gemini</div>
-      <div class="sub">Usada para sintetizar e neutralizar os títulos. Fica só na sua máquina (~/.clipeo).</div>
+      <div class="sub">Usada para sintetizar e neutralizar os títulos. Fica só na sua máquina (~/.aspis).</div>
       <div class="key-row">
         <input type="password" class="inp" id="gemini-key" placeholder="${ph}" autocomplete="off" spellcheck="false">
         <button class="primary" id="save-gemini" onclick="saveGemini()">Salvar</button>
@@ -760,7 +760,7 @@
           consentimento”, adicione seu e-mail como <b>usuário de teste</b>. Baixe o JSON e cole.
         </div>`;
     } else if (!s.channels.length) {
-      h += `<div class="sub">Entre com sua conta do Google e escolha o canal cujas inscrições o Clipeo deve ler.</div>
+      h += `<div class="sub">Entre com sua conta do Google e escolha o canal cujas inscrições o Aspis deve ler.</div>
         <div class="row-actions">
           <button class="primary" id="connect-btn" onclick="connectYt()">Conectar com o Google</button>
         </div>`;
@@ -912,7 +912,7 @@
   function renderOnboard(list) {
     list.innerHTML = `<div class="onboard">
       Para começar, conecte sua conta do YouTube.<br>
-      O Clipeo lê os canais que você assina e monta a lista — sem feed, sem thumbnails.
+      O Aspis lê os canais que você assina e monta a lista — sem feed, sem thumbnails.
       <br><button class="primary" onclick="openSettings()">Conectar YouTube</button>
     </div>`;
   }

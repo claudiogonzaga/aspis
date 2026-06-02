@@ -66,8 +66,8 @@ def save(video_id, cfg=None):
         store.set_flag(video_id, "saved_anki", 1)  # marcado: avaliado, sem cards
         return 0
 
-    deck = cfg["anki"].get("deck", "Clípeo")
-    tags = ["clipeo", v.get("pillar", "nenhum"), video_id]
+    deck = cfg["anki"].get("deck", "Aspis")
+    tags = ["aspis", v.get("pillar", "nenhum"), video_id]
 
     _invoke("createDeck", deck=deck)  # idempotente
     notes = [_note_for(f, deck, tags) for f in fatos]

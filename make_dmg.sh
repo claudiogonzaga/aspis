@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Gera o instalador único Clipeo-<versão>.dmg a partir do .app empacotado.
+# Gera o instalador único Aspis-<versão>.dmg a partir do .app empacotado.
 #
 # Uso:
 #   ./make_dmg.sh            # builda o .app (py2app), assina e empacota o .dmg
-#   ./make_dmg.sh --no-build # só assina + empacota um dist/Clipeo.app já existente
+#   ./make_dmg.sh --no-build # só assina + empacota um dist/Aspis.app já existente
 #
-# O .dmg contém o Clipeo.app e um atalho para /Applications (instalar arrastando).
-# NOTA: bundle/executável é ASCII ("Clipeo") — nome com acento quebra o codesign.
-# O nome de exibição "Clipeo" vem do CFBundleDisplayName. O volume do .dmg usa o
+# O .dmg contém o Aspis.app e um atalho para /Applications (instalar arrastando).
+# NOTA: bundle/executável é ASCII ("Aspis") — nome com acento quebra o codesign.
+# O nome de exibição "Aspis" vem do CFBundleDisplayName. O volume do .dmg usa o
 # nome bonito.
 set -euo pipefail
 
-BUNDLE="Clipeo"          # nome do .app/executável (ASCII, p/ codesign)
-VOL="Clipeo"             # nome de exibição do volume do .dmg
+BUNDLE="Aspis"          # nome do .app/executável (ASCII, p/ codesign)
+VOL="Aspis"             # nome de exibição do volume do .dmg
 VERSION="0.1.0"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="$HERE/.venv/bin/python"

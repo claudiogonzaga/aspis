@@ -1,4 +1,4 @@
-"""Clipeo — janela pywebview + ponte Python<->JS.
+"""Aspis — janela pywebview + ponte Python<->JS.
 
 Milestone 2: a UI passa a ler do SQLite (store.py), preenchido pela rotina
 (routine.py). As ações de leitura são reais; as ações de escrita do segundo
@@ -413,7 +413,7 @@ def main():
         print(f"UI não encontrada em {UI_PATH}", file=sys.stderr)
         sys.exit(1)
     webview.create_window(
-        "Clipeo",
+        "Aspis",
         UI_PATH,
         js_api=Api(),
         width=720,

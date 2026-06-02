@@ -1,10 +1,10 @@
-"""Empacotamento do Clipeo como app de macOS (.app) via py2app.
+"""Empacotamento do Aspis como app de macOS (.app) via py2app.
 
 Build:
     ./.venv/bin/python setup.py py2app          # build completo (distribuível)
     ./.venv/bin/python setup.py py2app -A       # alias mode (rápido, p/ teste)
 
-O .app resultante (em dist/) é a INTERFACE: lê o SQLite em ~/.clipeo/clipeo.db e
+O .app resultante (em dist/) é a INTERFACE: lê o SQLite em ~/.aspis/aspis.db e
 executa as ações dos botões (Obsidian, Anki, Baixar, Assistir). O pipeline diário
 (routine.py: YouTube + LLM) roda separado, pelo launchd usando o venv — por isso
 não embrulhamos google-genai/anthropic/googleapiclient aqui (bundle enxuto).
@@ -29,17 +29,17 @@ if os.path.exists("assets/oauth_client.json"):
 
 OPTIONS = {
     "argv_emulation": False,
-    "iconfile": "clipeo.icns",
+    "iconfile": "aspis.icns",
     "plist": {
         # CFBundleName em ASCII define o nome do bundle/executável (py2app usa
         # este campo) — acento aqui quebraria o codesign. O nome bonito com
         # acento aparece no Finder/janela via CFBundleDisplayName.
-        "CFBundleName": "Clipeo",
-        "CFBundleDisplayName": "Clipeo",
-        "CFBundleIdentifier": "com.clipeo.app",
+        "CFBundleName": "Aspis",
+        "CFBundleDisplayName": "Aspis",
+        "CFBundleIdentifier": "com.aspis.app",
         "CFBundleVersion": version.__version__,
         "CFBundleShortVersionString": version.__version__,
-        "CFBundleIconFile": "clipeo.icns",
+        "CFBundleIconFile": "aspis.icns",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "11.0",
         "LSApplicationCategoryType": "public.app-category.productivity",
@@ -84,14 +84,14 @@ OPTIONS = {
     ],
 }
 
-# IMPORTANTE: o nome do bundle/executável é ASCII ("Clipeo") de propósito.
-# Um nome com acento ("Clipeo") quebra o codesign (divergência de
+# IMPORTANTE: o nome do bundle/executável é ASCII ("Aspis") de propósito.
+# Um nome com acento ("Aspis") quebra o codesign (divergência de
 # normalização Unicode NFC/NFD no nome do executável), deixando o selo
 # inválido — o que o Gatekeeper, sob quarentena, reporta como "danificado".
 # O nome bonito com acento aparece via CFBundleName/CFBundleDisplayName.
 setup(
     app=APP,
-    name="Clipeo",
+    name="Aspis",
     data_files=DATA_FILES,
     options={"py2app": OPTIONS},
     setup_requires=["py2app"],

@@ -1,7 +1,7 @@
 """obsidian.py — escreve o conhecimento no "segundo cérebro" (vault Obsidian).
 
 Para cada vídeo salvo:
-  - cria/atualiza uma nota .md em {vault}/Clípeo/ com frontmatter,
+  - cria/atualiza uma nota .md em {vault}/Aspis/ com frontmatter,
     resumo, pontos-chave e citações;
   - garante um link na MOC do pilar ({Pilar} - MOC.md);
   - acrescenta um link na nota diária ({daily_notes_folder}/{YYYY-MM-DD}.md).
@@ -22,7 +22,7 @@ PILLAR_NAMES = {
     "paternidade": "Paternidade",
     "nenhum": "Geral",
 }
-SUBFOLDER = "Clípeo"
+SUBFOLDER = "Aspis"
 
 
 def _sanitize(name, max_len=80):
@@ -62,7 +62,7 @@ def _render_note(v):
         f"data: {data}",
         f"url: {v.get('url','')}",
         f"score: {v.get('score', 0)}",
-        f"tags: [{v['pillar']}, clipeo]",
+        f"tags: [{v['pillar']}, aspis]",
         "---",
         "",
         f"# {v['neutral_title']}",
@@ -114,7 +114,7 @@ def _update_moc(cfg, v):
     _ensure_dir(folder)
     moc_path = os.path.join(folder, f"{pillar_name} - MOC.md")
     link = f"- [[{_note_basename(v)}]]"
-    header = f"# {pillar_name} — MOC\n\nMapa de conteúdo do pilar **{pillar_name}**, curado pelo Clípeo.\n"
+    header = f"# {pillar_name} — MOC\n\nMapa de conteúdo do pilar **{pillar_name}**, curado pelo Aspis.\n"
     _append_link_once(moc_path, link, header=header)
 
 
@@ -125,7 +125,7 @@ def _update_daily_note(cfg, v):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     daily_path = os.path.join(folder, f"{today}.md")
     link = f"- [[{_note_basename(v)}]] · {PILLAR_NAMES.get(v['pillar'],'Geral')}"
-    _append_link_once(daily_path, link, header="## Clípeo")
+    _append_link_once(daily_path, link, header="## Aspis")
 
 
 def save(video_id, cfg=None):
@@ -161,10 +161,10 @@ def write_daily_digest(cfg=None):
     lines = [
         "---",
         f"data: {today}",
-        "tags: [clipeo, digest]",
+        "tags: [aspis, digest]",
         "---",
         "",
-        f"# Clípeo — {today}",
+        f"# Aspis — {today}",
         "",
         f"{len(videos)} vídeo(s) acima do limiar · {filtered} filtrado(s).",
         "",

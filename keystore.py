@@ -1,6 +1,6 @@
 """keystore.py — chaves de API coladas no app, compartilhadas com a rotina.
 
-As chaves ficam em ~/.clipeo/secrets.json (permissão 0600), indexadas pelo nome
+As chaves ficam em ~/.aspis/secrets.json (permissão 0600), indexadas pelo nome
 da variável de ambiente correspondente (ex.: "GEMINI_API_KEY"). Tanto o app
 (onde o usuário cola a chave) quanto a rotina do launchd (que chama o LLM) leem
 daqui.

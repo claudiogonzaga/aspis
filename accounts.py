@@ -3,7 +3,7 @@
 Fluxo pensado para o usuário final (sem terminal):
   1. O usuário cola, numa tela do app, a credencial OAuth ("client secret"
      baixada do Google Cloud — tipo "Desktop app"). Guardamos em
-     ~/.clipeo/oauth_client.json. Cada usuário usa a SUA credencial.
+     ~/.aspis/oauth_client.json. Cada usuário usa a SUA credencial.
   2. Clica em "Conectar": abre o navegador no login do Google. O seletor do
      próprio Google resolve "qual conta" e, em contas com vários canais
      (brand accounts), "qual canal".
@@ -11,7 +11,7 @@ Fluxo pensado para o usuário final (sem terminal):
      conectados e o usuário marca qual é o ATIVO. A rotina e a leitura usam
      sempre o canal ativo.
 
-Armazenamento (tudo em ~/.clipeo/, fora do repositório):
+Armazenamento (tudo em ~/.aspis/, fora do repositório):
   - oauth_client.json           credencial do app (colada pelo usuário)
   - accounts/index.json         {active, channels:[{channel_id,title,handle,thumb,token_file}]}
   - accounts/token_<id>.json    token OAuth por canal (sensível)
@@ -216,7 +216,7 @@ def connect():
             prompt="select_account",
             access_type="offline",
             authorization_prompt_message="",
-            success_message="Conta conectada ao Clípeo. Pode fechar esta aba e voltar ao app.",
+            success_message="Conta conectada ao Aspis. Pode fechar esta aba e voltar ao app.",
         )
 
         service = build("youtube", "v3", credentials=creds, cache_discovery=False)

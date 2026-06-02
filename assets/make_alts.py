@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conceitos MINIMALISTAS no traço grego clássico. Saída: /tmp/clipeo_alts.png.
+"""Conceitos MINIMALISTAS no traço grego clássico. Saída: /tmp/aspis_alts.png.
 
 A: Capacete coríntio em silhueta (perfil) — o emblema grego por excelência.
 B: Meandro (greek key) em moldura quadrada, centro vazio — pura geometria grega.
@@ -187,5 +187,5 @@ for i, (im, lab) in enumerate([(a, "A  Capacete coríntio"), (b, "B  Meandro (gr
     x = pad + i * (OUT + pad)
     sheet.paste(im, (x, pad), im)
     dd.text((x + 8, pad + OUT + 8), lab, fill=(30, 30, 30))
-sheet.save("/tmp/clipeo_alts.png")
-print("salvo /tmp/clipeo_alts.png")
+sheet.save("/tmp/aspis_alts.png")
+print("salvo /tmp/aspis_alts.png")

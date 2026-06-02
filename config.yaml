@@ -1,4 +1,4 @@
-# Clípeo — configuração
+# Aspis — configuração
 # Edite este arquivo. Segredos (chaves de API) vêm de variáveis de ambiente,
 # nunca daqui. client_secret.json / token.json ficam fora do repositório.
 
@@ -47,7 +47,7 @@ llm:
 youtube:
   # LOGIN agora é DENTRO DO APP (botão "Conta" → cola a credencial → Conectar).
   # Suporta vários canais; o canal ATIVO é escolhido no app. A credencial e os
-  # tokens ficam em ~/.clipeo/oauth_client.json e ~/.clipeo/accounts/.
+  # tokens ficam em ~/.aspis/oauth_client.json e ~/.aspis/accounts/.
   #
   # Alternativa sem login (modo manual): liste channel_ids e use uma API key.
   # Se 'channels_manuais' estiver preenchido, ele tem prioridade sobre o login.
@@ -60,13 +60,13 @@ obsidian:
 
 anki:
   enabled: true
-  deck: "Clípeo"
+  deck: "Aspis"
 
 download:
-  folder: "~/Clipeo/Downloads"       # onde o app baixa os vídeos
+  folder: "~/Aspis/Downloads"       # onde o app baixa os vídeos
   # Pasta observada pelo Syncthing/Drive para enviar ao Android. O botão
-  # "Enviar p/ Android" copia o .mp4 para cá. Default: ~/Clipeo/ParaAndroid.
-  android_folder: "~/Clipeo/ParaAndroid"
+  # "Enviar p/ Android" copia o .mp4 para cá. Default: ~/Aspis/ParaAndroid.
+  android_folder: "~/Aspis/ParaAndroid"
 
 transcript:
   # Legendas via yt-dlp (json3/vtt, com impersonation curl_cffi); fallback

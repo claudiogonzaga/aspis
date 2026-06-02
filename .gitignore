@@ -8,10 +8,10 @@ client_secret.json
 token.json
 *.sqlite
 *.db
-clipeo.db
-.clipeo/
+aspis.db
+.aspis/
 
-/tmp/clipeo*.log
+/tmp/aspis*.log
 
 # build do py2app (artefatos)
 build/

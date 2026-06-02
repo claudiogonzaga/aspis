@@ -104,7 +104,7 @@ def _build_user_message(video, transcript, cfg):
 
 def _require_key(pcfg, default_env):
     env = pcfg.get("api_key_env", default_env)
-    # Prioriza a chave colada no app (~/.clipeo/secrets.json); cai no ambiente.
+    # Prioriza a chave colada no app (~/.aspis/secrets.json); cai no ambiente.
     try:
         import keystore
 

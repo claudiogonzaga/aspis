@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Gera clipeo.icns (na raiz do projeto) a partir de assets/clipeo_icon_1024.png,
+# Gera aspis.icns (na raiz do projeto) a partir de assets/aspis_icon_1024.png,
 # criando o .iconset com todos os tamanhos via sips e empacotando com iconutil.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-MASTER="$HERE/clipeo_icon_1024.png"
-SET="$HERE/clipeo.iconset"
-ICNS="$ROOT/clipeo.icns"
+MASTER="$HERE/aspis_icon_1024.png"
+SET="$HERE/aspis.iconset"
+ICNS="$ROOT/aspis.icns"
 
 [[ -f "$MASTER" ]] || { echo "ERRO: $MASTER não existe. Rode make_icon.py antes."; exit 1; }
 

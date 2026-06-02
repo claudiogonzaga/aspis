@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Ícone do Clípeo: um Gorgoneion (face frontal da Medusa, serpentes no lugar
+"""Ícone do Aspis: um Gorgoneion (face frontal da Medusa, serpentes no lugar
 dos cabelos) no estilo da cerâmica grega de figuras negras (black-figure):
 silhueta PRETA sobre fundo TERRACOTA, com detalhes "incisos" em terracota.
 É o motivo apotropaico clássico do escudo de Perseu, no idioma visual dos vasos
 e escudos (aspis) gregos.
 
-Saída: assets/clipeo_icon_1024.png. build_icns.sh gera o .icns.
+Saída: assets/aspis_icon_1024.png. build_icns.sh gera o .icns.
 Supersampling 2x + LANCZOS.
 """
 import math
@@ -159,6 +159,6 @@ d.line([C, my + face_r * 0.10, C, my + face_r * 0.27], fill=BK, width=int(face_r
 
 out = Image.alpha_composite(base, fig)
 icon = out.resize((OUT, OUT), Image.LANCZOS)
-path = os.path.join(os.path.dirname(__file__) or ".", "clipeo_icon_1024.png")
+path = os.path.join(os.path.dirname(__file__) or ".", "aspis_icon_1024.png")
 icon.save(path)
 print("salvo:", path, icon.size)

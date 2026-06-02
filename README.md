@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/clipeo_icon_1024.png" width="160" alt="Ícone do Clípeo — escudo de bronze polido">
+  <img src="assets/aspis_icon_1024.png" width="160" alt="Ícone do Aspis — escudo de bronze polido">
 </p>
 
-# Clípeo
+# Aspis
 
 Um app nativo de macOS, de interface ultra-minimalista, que funciona como um
 **escudo entre você e o YouTube**. Em vez de abrir o feed algorítmico, você abre
-o Clípeo e vê uma **lista de texto enxuta, ranqueada pelos seus
+o Aspis e vê uma **lista de texto enxuta, ranqueada pelos seus
 objetivos de vida** — sem thumbnails, sem títulos sensacionalistas. O foco não é
 assistir vídeos: é **extrair e sintetizar** o que importa e arquivar num
 "segundo cérebro" (Obsidian e Anki). Assistir é a exceção.
@@ -35,7 +35,7 @@ assistir vídeos: é **extrair e sintetizar** o que importa e arquivar num
 - **Sync para o Android** é off-the-shelf (Syncthing/Drive); o app só escreve na
   pasta configurada.
 
-Estado compartilhado fica em `~/.clipeo/` (`config.yaml` + `clipeo.db`), para que
+Estado compartilhado fica em `~/.aspis/` (`config.yaml` + `aspis.db`), para que
 o `.app` empacotado e a rotina do `launchd` enxerguem o mesmo dado.
 
 ### Módulos
@@ -59,7 +59,7 @@ o `.app` empacotado e a rotina do `launchd` enxerguem o mesmo dado.
 ### 1. Dependências
 
 ```bash
-cd clipeo
+cd aspis
 python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ```
@@ -67,7 +67,7 @@ python3 -m venv .venv
 ### 2. Configuração
 
 Na primeira execução, o `config.yaml` do projeto é copiado para
-`~/.clipeo/config.yaml`. Edite **esse** arquivo: pilares, limiar de score,
+`~/.aspis/config.yaml`. Edite **esse** arquivo: pilares, limiar de score,
 caminho do vault do Obsidian, pasta de download, e a string do modelo.
 
 ### 3. Chave do LLM (cérebro Gemini, ativo)
@@ -93,13 +93,13 @@ Você só precisa criar uma vez a credencial de API do Google:
 3. Como o escopo `youtube.readonly` é "sensível", em "Tela de consentimento OAuth"
    adicione **você mesmo como usuário de teste** (modo de teste — sem precisar de
    verificação do Google).
-4. **Baixe o JSON** da credencial. No Clípeo: **Conta → cole o JSON → Salvar →
+4. **Baixe o JSON** da credencial. No Aspis: **Conta → cole o JSON → Salvar →
    Conectar**. O navegador abre no login do Google; escolha a **conta** e, se ela
    tiver vários canais (brand accounts), o **canal**.
 
 Você pode **conectar vários canais** e alternar qual é o **ativo** na tela Conta.
-A credencial fica em `~/.clipeo/oauth_client.json` e os tokens em
-`~/.clipeo/accounts/` (cada usuário usa a própria credencial; nada vai pro Git).
+A credencial fica em `~/.aspis/oauth_client.json` e os tokens em
+`~/.aspis/accounts/` (cada usuário usa a própria credencial; nada vai pro Git).
 A rotina diária (`launchd`) usa sempre o canal ativo.
 
 > Alternativa sem login: preencha `youtube.channels_manuais` no `config.yaml` com
@@ -127,14 +127,14 @@ Para só ver a interface com dados de exemplo (sem rodar o pipeline):
 
 ## Agendamento diário (launchd)
 
-1. Edite `com.clipeo.daily.plist`: confirme os caminhos e preencha
+1. Edite `com.aspis.daily.plist`: confirme os caminhos e preencha
    `GEMINI_API_KEY` em `EnvironmentVariables` (o launchd **não** herda o ambiente
    do shell). **Não comite a chave.**
 2. Instale:
 
    ```bash
-   cp com.clipeo.daily.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/com.clipeo.daily.plist
+   cp com.aspis.daily.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/com.aspis.daily.plist
    ```
 
 O Mac precisa estar acordado às 6h (ou ajuste o horário no plist).
@@ -142,21 +142,21 @@ O Mac precisa estar acordado às 6h (ou ajuste o horário no plist).
 ## Instalar (a partir do .dmg da Release)
 
 1. Baixe o `.dmg` mais recente em **[Releases](../../releases)**.
-2. Abra o `.dmg` e arraste **Clípeo** para **Aplicativos**.
+2. Abra o `.dmg` e arraste **Aspis** para **Aplicativos**.
 3. **Primeira abertura** (o app não é assinado por uma conta paga da Apple, então
    o Gatekeeper avisa que o desenvolvedor "não pode ser verificado"):
-   **clique com o botão direito no Clípeo → Abrir → Abrir**. Só na 1ª vez.
+   **clique com o botão direito no Aspis → Abrir → Abrir**. Só na 1ª vez.
    - Se ainda recusar, rode no Terminal:
-     `xattr -dr com.apple.quarantine "/Applications/Clipeo.app"` e abra de novo.
+     `xattr -dr com.apple.quarantine "/Applications/Aspis.app"` e abra de novo.
 
-> Observação: o bundle no disco se chama `Clipeo.app` (ASCII, exigência do
-> `codesign`), mas o Finder, a janela e o app mostram **"Clípeo"**.
+> Observação: o bundle no disco se chama `Aspis.app` (ASCII, exigência do
+> `codesign`), mas o Finder, a janela e o app mostram **"Aspis"**.
 
 ## Empacotar como .app / .dmg (build local)
 
 ```bash
 python3 assets/make_icon.py        # (re)gera o ícone
-bash   assets/build_icns.sh        # gera clipeo.icns
+bash   assets/build_icns.sh        # gera aspis.icns
 ./make_dmg.sh                      # builda .app, ASSINA (ad-hoc) e empacota o .dmg
 open dist/
 ```
@@ -175,7 +175,7 @@ off-the-shelf de propósito.
 ## Privacidade e avisos
 
 - **Nenhum segredo no código.** Chaves vêm de variáveis de ambiente;
-  `client_secret.json` e `token.json` ficam em `~/.clipeo/` e fora do Git.
+  `client_secret.json` e `token.json` ficam em `~/.aspis/` e fora do Git.
 - Transcrição de terceiros e download (yt-dlp) são **zona cinzenta** dos termos do
   YouTube — uso pessoal apenas. A ausência de legenda é tratada com elegância.
 - **Assistir abre o arquivo local** no player do sistema — nunca o YouTube — para
