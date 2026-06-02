@@ -147,6 +147,12 @@
   .qa-q::before { content: "▸ "; color: var(--fg-tertiary); }
   .qa-a { color: var(--fg-secondary); line-height: 1.5; padding-left: 14px; border-left: 2px solid var(--border); }
   .qa-a.thinking { font-style: italic; color: var(--fg-tertiary); }
+  .qa-a p { margin: 0 0 8px 0; }
+  .qa-a p:last-child { margin-bottom: 0; }
+  .qa-a strong { color: var(--fg); font-weight: 600; }
+  .qa-a code { font-family: var(--mono); font-size: 12px; background: var(--hover); padding: 1px 4px; border-radius: 4px; }
+  /* a área de exploração e a síntese devem permitir seleção/cópia de texto */
+  .explore, .explore *, .synth .resumo, .points, .qa-q, .qa-a { user-select: text; -webkit-user-select: text; cursor: auto; }
   .ask-row { display: flex; gap: 8px; align-items: center; }
   .ask-input {
     flex: 1 1 auto; min-width: 0; font-family: var(--sans); font-size: 13px;
@@ -469,13 +475,24 @@
       </div>`;
   }
 
+  // markdown mínimo e seguro: escapa HTML primeiro, depois aplica **negrito**,
+  // *itálico*, `código` e quebras de linha/parágrafo.
+  function mdLite(s) {
+    let t = esc(s);
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    t = t.replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>");
+    return "<p>" + t + "</p>";
+  }
+
   function renderQa(videoId, items) {
     const box = document.getElementById("qa-" + videoId);
     if (!box) return;
     box.innerHTML = (items || []).map(qa => `
       <div class="qa">
         <div class="qa-q">${esc(qa.question)}</div>
-        <div class="qa-a">${esc(qa.answer).replace(/\n/g, "<br>")}</div>
+        <div class="qa-a">${mdLite(qa.answer)}</div>
       </div>`).join("");
   }
 
