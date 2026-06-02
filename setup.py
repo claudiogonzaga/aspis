@@ -1,4 +1,4 @@
-"""Empacotamento do Clípeo como app de macOS (.app) via py2app.
+"""Empacotamento do Clipeo como app de macOS (.app) via py2app.
 
 Build:
     ./.venv/bin/python setup.py py2app          # build completo (distribuível)
@@ -35,7 +35,7 @@ OPTIONS = {
         # este campo) — acento aqui quebraria o codesign. O nome bonito com
         # acento aparece no Finder/janela via CFBundleDisplayName.
         "CFBundleName": "Clipeo",
-        "CFBundleDisplayName": "Clípeo",
+        "CFBundleDisplayName": "Clipeo",
         "CFBundleIdentifier": "com.clipeo.app",
         "CFBundleVersion": version.__version__,
         "CFBundleShortVersionString": version.__version__,
@@ -85,7 +85,7 @@ OPTIONS = {
 }
 
 # IMPORTANTE: o nome do bundle/executável é ASCII ("Clipeo") de propósito.
-# Um nome com acento ("Clípeo") quebra o codesign (divergência de
+# Um nome com acento ("Clipeo") quebra o codesign (divergência de
 # normalização Unicode NFC/NFD no nome do executável), deixando o selo
 # inválido — o que o Gatekeeper, sob quarentena, reporta como "danificado".
 # O nome bonito com acento aparece via CFBundleName/CFBundleDisplayName.

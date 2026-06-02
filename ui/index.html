@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Clípeo</title>
+<title>Clipeo</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -248,15 +248,13 @@
 <div class="wrap">
   <header>
     <div class="topbar">
-      <div class="wordmark">Clípeo</div>
+      <div class="wordmark">Clipeo</div>
       <div class="top-actions">
         <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
         <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
       </div>
     </div>
     <div class="meta">
-      <span id="today"></span>
-      <span class="dot">·</span>
       <span id="new-count">—</span>
       <span class="dot">·</span>
       <span class="period-seg" id="period-seg"></span>
@@ -677,7 +675,7 @@
     try {
       const r = await a.install_update(updateStatus.dmg_url);
       if (r && r.ok) {
-        if (note) { note.className = "note ok"; note.textContent = "Atualizado! Reabrindo o Clípeo…"; }
+        if (note) { note.className = "note ok"; note.textContent = "Atualizado! Reabrindo o Clipeo…"; }
       } else {
         if (note) { note.className = "note err"; note.textContent = (r && r.error) || "Falha ao instalar."; }
         if (btn) { btn.disabled = false; btn.textContent = "Atualizar agora"; }
@@ -762,7 +760,7 @@
           consentimento”, adicione seu e-mail como <b>usuário de teste</b>. Baixe o JSON e cole.
         </div>`;
     } else if (!s.channels.length) {
-      h += `<div class="sub">Entre com sua conta do Google e escolha o canal cujas inscrições o Clípeo deve ler.</div>
+      h += `<div class="sub">Entre com sua conta do Google e escolha o canal cujas inscrições o Clipeo deve ler.</div>
         <div class="row-actions">
           <button class="primary" id="connect-btn" onclick="connectYt()">Conectar com o Google</button>
         </div>`;
@@ -914,7 +912,7 @@
   function renderOnboard(list) {
     list.innerHTML = `<div class="onboard">
       Para começar, conecte sua conta do YouTube.<br>
-      O Clípeo lê os canais que você assina e monta a lista — sem feed, sem thumbnails.
+      O Clipeo lê os canais que você assina e monta a lista — sem feed, sem thumbnails.
       <br><button class="primary" onclick="openSettings()">Conectar YouTube</button>
     </div>`;
   }
@@ -929,7 +927,6 @@
     try { const vp = await a.get_view_prefs(); period = vp.period; minStars = vp.min_stars; renderPeriod(); renderChips(); } catch (e) {}
     await refreshYtStatus();
     await refreshPilares();
-    document.getElementById("today").textContent = fmtDate(new Date());
     if (!ytStatus.active) {
       renderOnboard(list);
       document.getElementById("new-count").textContent = "—";
@@ -953,7 +950,6 @@
     }
 
     // header counts
-    document.getElementById("today").textContent = fmtDate(new Date());
     try {
       const n = await a.new_count();
       document.getElementById("new-count").textContent =
