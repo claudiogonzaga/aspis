@@ -9,12 +9,12 @@
          Ajuste os caminhos se mover o projeto. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/claudioangelo/Documents/CLAUDE/clipeo/.venv/bin/python</string>
-        <string>/Users/claudioangelo/Documents/CLAUDE/clipeo/routine.py</string>
+        <string>/Users/claudioangelo/Documents/CLAUDE/aspis/.venv/bin/python</string>
+        <string>/Users/claudioangelo/Documents/CLAUDE/aspis/routine.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/claudioangelo/Documents/CLAUDE/clipeo</string>
+    <string>/Users/claudioangelo/Documents/CLAUDE/aspis</string>
 
     <!-- launchd NÃO herda o ambiente do shell. Preencha sua chave aqui
          (este arquivo é local; não comite com a chave real). -->
