@@ -25,9 +25,19 @@ CREATE TABLE IF NOT EXISTS videos (
     saved_anki INTEGER DEFAULT 0,
     downloaded INTEGER DEFAULT 0,
     read INTEGER DEFAULT 0,
-    sent_android INTEGER DEFAULT 0
+    sent_android INTEGER DEFAULT 0,
+    transcript_text TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+-- histórico de perguntas/respostas por vídeo (estilo NotebookLM)
+CREATE TABLE IF NOT EXISTS qa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id TEXT NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_qa_video ON qa(video_id, id);
 """
 
 # Colunas que viajam como JSON (lista/objeto) entre o banco e o resto do app.
@@ -51,6 +61,8 @@ def init():
             conn.execute("ALTER TABLE videos ADD COLUMN read INTEGER DEFAULT 0")
         if "sent_android" not in cols:
             conn.execute("ALTER TABLE videos ADD COLUMN sent_android INTEGER DEFAULT 0")
+        if "transcript_text" not in cols:
+            conn.execute("ALTER TABLE videos ADD COLUMN transcript_text TEXT")
 
 
 def now_iso():
@@ -86,7 +98,7 @@ def upsert_video(v):
         "video_id", "channel", "channel_id", "original_title", "neutral_title",
         "url", "published_at", "duration", "pillar", "score", "is_clickbait",
         "resumo", "pontos_chave", "fatos", "citacoes", "transcript_available",
-        "fetched_at",
+        "fetched_at", "transcript_text",
     ]
     placeholders = ", ".join("?" for _ in cols)
     updates = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "video_id")
@@ -168,6 +180,45 @@ def set_flag(video_id, field, value=1):
         conn.execute(
             f"UPDATE videos SET {field} = ? WHERE video_id = ?", (value, video_id)
         )
+
+
+def set_transcript_text(video_id, text):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE videos SET transcript_text = ? WHERE video_id = ?", (text, video_id)
+        )
+
+
+def get_transcript_text(video_id):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT transcript_text FROM videos WHERE video_id = ?", (video_id,)
+        ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+# --- histórico de perguntas/respostas por vídeo (NotebookLM-like) -----------
+def add_qa(video_id, question, answer):
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO qa (video_id, question, answer, created_at) VALUES (?,?,?,?)",
+            (video_id, question, answer, now_iso()),
+        )
+        return cur.lastrowid
+
+
+def get_qa(video_id):
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, question, answer, created_at FROM qa WHERE video_id = ? ORDER BY id",
+            (video_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_qa(qa_id):
+    with _connect() as conn:
+        conn.execute("DELETE FROM qa WHERE id = ?", (qa_id,))
 
 
 def get_meta(key, default=None):

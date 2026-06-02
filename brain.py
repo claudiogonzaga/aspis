@@ -250,6 +250,89 @@ def analyze(video, transcript, cfg=None, max_retries=2):
     )
 
 
+# --- Q&A sobre um vídeo (texto livre, baseado na transcrição) ---------------
+ASK_MAX_TOKENS = 1200
+ASK_TRANSCRIPT_CHARS = 24000  # contexto da transcrição enviado ao modelo
+
+
+def _call_gemini_text(system_text, user_msg, pcfg):
+    from google import genai
+    from google.genai import types
+
+    key = _require_key(pcfg, "GEMINI_API_KEY")
+    client = genai.Client(api_key=key)
+    resp = client.models.generate_content(
+        model=pcfg["model"],
+        contents=user_msg,
+        config=types.GenerateContentConfig(
+            system_instruction=system_text,
+            temperature=pcfg.get("temperature", 0.3),
+            max_output_tokens=ASK_MAX_TOKENS,
+        ),
+    )
+    return resp.text
+
+
+def _call_anthropic_text(system_text, user_msg, pcfg):
+    import anthropic
+
+    key = _require_key(pcfg, "ANTHROPIC_API_KEY")
+    client = anthropic.Anthropic(api_key=key)
+    resp = client.messages.create(
+        model=pcfg["model"],
+        max_tokens=ASK_MAX_TOKENS,
+        temperature=pcfg.get("temperature", 0.3),
+        system=[{"type": "text", "text": system_text}],
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+
+
+_TEXT_PROVIDERS = {"gemini": _call_gemini_text, "anthropic": _call_anthropic_text}
+
+
+def ask(video, transcript_text, question, history=None, cfg=None):
+    """Responde a uma pergunta SOBRE o vídeo, usando a transcrição completa como
+    fonte. `video` é o dict do banco (tem neutral_title, resumo, etc.).
+    `history` é lista de {question, answer} anteriores (contexto da conversa).
+    Responde em texto livre, no idioma da pergunta. Retorna a string da resposta."""
+    cfg = cfg or load()
+    name, _, pcfg = _resolve_provider(cfg)
+    call = _TEXT_PROVIDERS.get(name)
+    if not call:
+        raise RuntimeError(f"Provedor '{name}' não suporta Q&A.")
+
+    sys_txt = (
+        "Você é um assistente de estudo que ajuda o usuário a aprofundar UM vídeo "
+        "específico. Responda à pergunta APENAS com base na transcrição e nos "
+        "metadados fornecidos. Se a resposta não estiver na transcrição, diga isso "
+        "claramente e ofereça o que dá para inferir, sem inventar fatos. Seja conciso "
+        "e direto. Responda no MESMO IDIOMA da pergunta do usuário. Quando útil, cite "
+        "trechos curtos entre aspas."
+    )
+
+    parts = [
+        f"VÍDEO: {video.get('neutral_title') or video.get('original_title','')}",
+        f"Canal: {video.get('channel','')}",
+    ]
+    if video.get("resumo"):
+        parts.append(f"Resumo já gerado: {video['resumo']}")
+    tt = (transcript_text or "").strip()
+    if tt:
+        parts.append("\nTRANSCRIÇÃO (fonte da verdade):\n" + tt[:ASK_TRANSCRIPT_CHARS])
+    else:
+        parts.append("\n[Sem transcrição disponível — responda só pelos metadados e diga isso.]")
+    if history:
+        hist = "\n".join(
+            f"P: {h.get('question','')}\nR: {h.get('answer','')}" for h in history[-6:]
+        )
+        parts.append("\nCONVERSA ANTERIOR:\n" + hist)
+    parts.append(f"\nPERGUNTA DO USUÁRIO:\n{question}")
+
+    answer = call(sys_txt, "\n".join(parts), pcfg)
+    return (answer or "").strip()
+
+
 if __name__ == "__main__":
     cfg = load()
     name, _, pcfg = _resolve_provider(cfg)

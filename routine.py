@@ -82,6 +82,8 @@ def run(cfg=None, max_total=None):
                 "fatos": analysis["fatos"],
                 "citacoes": analysis["citacoes"],
                 "transcript_available": 1 if tr.get("available") else 0,
+                # guarda a transcrição completa para o Q&A (NotebookLM-like)
+                "transcript_text": tr.get("text") if tr.get("available") else None,
             }
             store.upsert_video(row)
             processed += 1

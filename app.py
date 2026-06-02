@@ -222,6 +222,53 @@ class Api:
         store.set_flag(video_id, "feedback", int(value))
         return {"ok": True}
 
+    # --- Q&A por vídeo (explorar/aprofundar, estilo NotebookLM) ---
+    def get_qa(self, video_id):
+        return store.get_qa(video_id)
+
+    def ask_video(self, video_id, question):
+        """Pergunta sobre o vídeo, respondida pela transcrição completa. Salva no
+        histórico. Erro legível em vez de exceção silenciosa."""
+        question = (question or "").strip()
+        if not question:
+            return {"ok": False, "error": "Escreva uma pergunta."}
+        v = store.get_video(video_id)
+        if not v:
+            return {"ok": False, "error": "Vídeo não encontrado."}
+
+        # transcrição: usa a salva; se não houver, tenta buscar agora e guarda
+        tt = store.get_transcript_text(video_id)
+        if not tt:
+            try:
+                import transcript as tmod
+
+                tr = tmod.get_transcript(video_id, self.cfg)
+                if tr.get("available") and tr.get("text"):
+                    tt = tr["text"]
+                    store.set_transcript_text(video_id, tt)
+            except Exception:
+                tt = None
+
+        try:
+            import brain
+
+            history = store.get_qa(video_id)
+            answer = brain.ask(v, tt, question, history=history, cfg=self.cfg)
+            qa_id = store.add_qa(video_id, question, answer)
+            return {"ok": True, "id": qa_id, "question": question, "answer": answer,
+                    "had_transcript": bool(tt)}
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            if "429" in msg or "Too Many Requests" in msg:
+                msg = "O serviço limitou agora — tente em instantes."
+            elif "chave" in msg.lower() or "key" in msg.lower():
+                msg = "Configure a chave do Gemini em Configurações."
+            return {"ok": False, "error": msg}
+
+    def delete_qa(self, qa_id):
+        store.delete_qa(qa_id)
+        return {"ok": True}
+
     # --- conta do YouTube (login multi-canal dentro do app) ---
     def yt_status(self):
         import accounts

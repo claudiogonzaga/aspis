@@ -138,6 +138,25 @@
   .original-title.hidden { display: none; }
   .hint { margin-top: 8px; font-size: 11px; color: var(--fg-tertiary); }
 
+  /* Explorar (Q&A por vídeo) */
+  .explore { margin-top: 18px; padding-top: 14px; border-top: 0.5px solid var(--border); }
+  .explore-title { font-size: 12.5px; font-weight: 600; color: var(--fg); margin-bottom: 10px; }
+  .qa-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+  .qa { font-size: 13px; }
+  .qa-q { font-weight: 600; color: var(--fg); margin-bottom: 4px; }
+  .qa-q::before { content: "▸ "; color: var(--fg-tertiary); }
+  .qa-a { color: var(--fg-secondary); line-height: 1.5; padding-left: 14px; border-left: 2px solid var(--border); }
+  .qa-a.thinking { font-style: italic; color: var(--fg-tertiary); }
+  .ask-row { display: flex; gap: 8px; align-items: center; }
+  .ask-input {
+    flex: 1 1 auto; min-width: 0; font-family: var(--sans); font-size: 13px;
+    border: 0.5px solid var(--btn-border); border-radius: 8px; padding: 8px 11px;
+    background: transparent; color: var(--fg);
+  }
+  .ask-input:disabled { opacity: 0.6; }
+  .ask-btn { white-space: nowrap; }
+  .explore-hint { margin-top: 8px; font-size: 11px; color: var(--fg-tertiary); }
+
   footer {
     margin-top: 36px; padding-top: 16px; border-top: 0.5px solid var(--border);
     font-size: 12.5px; color: var(--fg-tertiary); text-align: center;
@@ -432,7 +451,61 @@
         </div>
         <div class="hint">Passe o mouse sobre os botões para ver o que cada um faz.</div>
         <div class="original-title hidden">“${esc(v.original_title)}”</div>
+
+        <div class="explore">
+          <div class="explore-title">Explorar este vídeo</div>
+          <div class="qa-list" id="qa-${v.video_id}"></div>
+          <div class="ask-row">
+            <input class="ask-input" id="ask-${v.video_id}" placeholder="Pergunte algo sobre o vídeo…"
+                   onkeydown="if(event.key==='Enter'){event.stopPropagation();askVideo('${v.video_id}')}">
+            <button class="primary ask-btn" onclick="event.stopPropagation();askVideo('${v.video_id}')">Perguntar</button>
+          </div>
+          <div class="explore-hint">A IA responde consultando a transcrição completa. As perguntas ficam salvas aqui.</div>
+        </div>
       </div>`;
+  }
+
+  function renderQa(videoId, items) {
+    const box = document.getElementById("qa-" + videoId);
+    if (!box) return;
+    box.innerHTML = (items || []).map(qa => `
+      <div class="qa">
+        <div class="qa-q">${esc(qa.question)}</div>
+        <div class="qa-a">${esc(qa.answer).replace(/\n/g, "<br>")}</div>
+      </div>`).join("");
+  }
+
+  async function loadQa(videoId) {
+    const a = api(); if (!a) return;
+    try { renderQa(videoId, await a.get_qa(videoId)); } catch (e) { console.error(e); }
+  }
+
+  async function askVideo(videoId) {
+    const a = api(); if (!a) return;
+    const inp = document.getElementById("ask-" + videoId);
+    const q = (inp.value || "").trim();
+    if (!q) return;
+    const box = document.getElementById("qa-" + videoId);
+    inp.disabled = true;
+    // mostra a pergunta + "pensando" otimista
+    box.insertAdjacentHTML("beforeend",
+      `<div class="qa pending"><div class="qa-q">${esc(q)}</div><div class="qa-a thinking">Consultando a transcrição…</div></div>`);
+    box.scrollTop = box.scrollHeight;
+    try {
+      const r = await a.ask_video(videoId, q);
+      if (r && r.ok) {
+        inp.value = "";
+        await loadQa(videoId);   // recarrega do banco (persistido)
+      } else {
+        const pend = box.querySelector(".qa.pending .qa-a");
+        if (pend) { pend.classList.remove("thinking"); pend.textContent = (r && r.error) || "Não foi possível responder."; }
+      }
+    } catch (e) {
+      const pend = box.querySelector(".qa.pending .qa-a");
+      if (pend) { pend.classList.remove("thinking"); pend.textContent = String(e); }
+    } finally {
+      inp.disabled = false; inp.focus();
+    }
   }
 
   function wireRow(rowEl, v) {
@@ -453,6 +526,10 @@
         handleAction(btn.dataset.action, v, host);
       };
     });
+    // impede que cliques na área de exploração (input/chat) colapsem o card
+    const ex = host.querySelector(".explore");
+    if (ex) ex.onclick = (e) => e.stopPropagation();
+    loadQa(v.video_id);  // carrega o histórico de perguntas salvas
   }
 
   async function handleAction(action, v, host) {
