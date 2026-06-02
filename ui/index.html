@@ -166,6 +166,9 @@
   /* Conta / configurações */
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .top-actions { display: flex; align-items: center; gap: 8px; }
+  .update-pill { color: #fff; background: #c8651e; border-color: #c8651e; font-weight: 500; }
+  .update-pill:hover { background: #b25718; }
+  .update-pill:disabled { opacity: 0.7; }
   .acct-btn:disabled { opacity: 0.6; cursor: default; }
   .toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -269,6 +272,7 @@
     <div class="topbar">
       <div class="wordmark">Aspis</div>
       <div class="top-actions">
+        <button class="acct-btn update-pill" id="app-update-btn" onclick="installUpdateFromTop()" style="display:none"></button>
         <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
         <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
       </div>
@@ -743,6 +747,45 @@
     renderPanel();
   }
 
+  // checagem silenciosa (sem depender do painel) — atualiza o botão do topo
+  async function checkUpdateSilent() {
+    const a = api(); if (!a) return;
+    try {
+      const r = await a.check_update();
+      if (r && r.ok) { updateStatus = r; renderTopUpdate(); }
+    } catch (e) { /* silencioso */ }
+  }
+
+  function renderTopUpdate() {
+    const btn = document.getElementById("app-update-btn");
+    if (!btn) return;
+    if (updateStatus && updateStatus.update_available) {
+      btn.style.display = "";
+      btn.innerHTML = `<span>⬇ Atualizar app → ${esc(updateStatus.latest)}</span>`;
+      btn.title = `Nova versão ${updateStatus.latest} disponível (você tem ${updateStatus.current}). Clique para baixar e instalar.`;
+    } else {
+      btn.style.display = "none";
+    }
+  }
+
+  async function installUpdateFromTop() {
+    const a = api(); if (!a) return;
+    const btn = document.getElementById("app-update-btn");
+    if (btn) { btn.disabled = true; btn.innerHTML = "<span>Baixando…</span>"; }
+    flash("Baixando e instalando a nova versão… o app vai reabrir sozinho.", 120000);
+    try {
+      const r = await a.install_update(updateStatus.dmg_url);
+      if (r && r.ok) { flash("Atualizado! Reabrindo o Aspis…"); }
+      else {
+        flash((r && r.error) || "Falha ao instalar.");
+        if (btn) { btn.disabled = false; renderTopUpdate(); }
+      }
+    } catch (e) {
+      flash(String(e));
+      if (btn) { btn.disabled = false; renderTopUpdate(); }
+    }
+  }
+
   async function installUpdate() {
     const a = api();
     const btn = document.getElementById("do-update");
@@ -1044,10 +1087,11 @@
   }
 
   // pywebview signals readiness via this event; also poll as fallback.
-  window.addEventListener("pywebviewready", load);
+  function boot() { load(); checkUpdateSilent(); }
+  window.addEventListener("pywebviewready", boot);
   let tries = 0;
   const poll = setInterval(() => {
-    if (api() || tries++ > 40) { clearInterval(poll); load(); }
+    if (api() || tries++ > 40) { clearInterval(poll); boot(); }
   }, 100);
 </script>
 </body>
