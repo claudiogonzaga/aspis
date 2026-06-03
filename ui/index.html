@@ -26,19 +26,32 @@
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   }
+  /* tema escuro: automático (sistema) ou forçado via data-theme="dark" */
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #161616;
-      --fg: #ededed;
-      --fg-secondary: #9c9c9c;
-      --fg-tertiary: #6e6e6e;
-      --border: rgba(255, 255, 255, 0.10);
-      --hover: rgba(255, 255, 255, 0.03);
-      --score: #7e7e7e;
-      --btn-border: rgba(255, 255, 255, 0.18);
-      --btn-hover: rgba(255, 255, 255, 0.05);
-      /* pills keep light bg + dark text per spec; legible enough on dark */
-    }
+    :root:not([data-theme]) { --bg:#161616; --fg:#ededed; --fg-secondary:#9c9c9c;
+      --fg-tertiary:#6e6e6e; --border:rgba(255,255,255,0.10); --hover:rgba(255,255,255,0.03);
+      --score:#7e7e7e; --btn-border:rgba(255,255,255,0.18); --btn-hover:rgba(255,255,255,0.05); }
+  }
+  :root[data-theme="dark"] { --bg:#161616; --fg:#ededed; --fg-secondary:#9c9c9c;
+    --fg-tertiary:#6e6e6e; --border:rgba(255,255,255,0.10); --hover:rgba(255,255,255,0.03);
+    --score:#7e7e7e; --btn-border:rgba(255,255,255,0.18); --btn-hover:rgba(255,255,255,0.05); }
+  :root[data-theme="light"] { --bg:#ffffff; --fg:#1a1a1a; --fg-secondary:#6b6b6b;
+    --fg-tertiary:#9a9a9a; --border:rgba(0,0,0,0.10); --hover:rgba(0,0,0,0.025);
+    --score:#8a8a8a; --btn-border:rgba(0,0,0,0.18); --btn-hover:rgba(0,0,0,0.04); }
+  /* tema TERRACOTA: fundo terra quente, texto bronze-escuro */
+  :root[data-theme="terra"] {
+    --bg: #f3e3d3;            /* terracota clara (papel/argila) */
+    --fg: #3a2417;           /* bronze bem escuro */
+    --fg-secondary: #7a5238;
+    --fg-tertiary: #a8825f;
+    --border: rgba(110, 60, 30, 0.18);
+    --hover: rgba(150, 80, 40, 0.06);
+    --score: #9a6a45;
+    --btn-border: rgba(110, 60, 30, 0.30);
+    --btn-hover: rgba(150, 80, 40, 0.10);
+    --pill-invest-bg: #e7d6f0; --pill-invest-fg: #5a2a7a;
+    --pill-saude-bg: #d8ecd2;  --pill-saude-fg: #2c5a22;
+    --pill-pat-bg: #f6ddc8;    --pill-pat-fg: #7a3a13;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,7 +67,8 @@
   .wrap { max-width: 680px; margin: 0 auto; padding: 28px 24px 64px; }
 
   header { margin-bottom: 22px; }
-  .wordmark { font-size: 15px; font-weight: 500; letter-spacing: 0.01em; }
+  .wordmark { font-size: 15px; font-weight: 500; letter-spacing: 0.01em; display: flex; align-items: center; gap: 8px; }
+  .wordmark .logo { width: 22px; height: 22px; border-radius: 5px; display: block; }
   .meta { margin-top: 3px; font-size: 12.5px; color: var(--fg-secondary); }
   .meta .dot { margin: 0 6px; color: var(--fg-tertiary); }
 
@@ -78,10 +92,16 @@
   .list .row:last-child { border-bottom: 0.5px solid var(--border); }
   .row:hover { background: var(--hover); }
   .score {
-    text-align: right; padding-top: 3px;
+    display: flex; justify-content: flex-end; padding-top: 4px;
   }
-  .stars { font-size: 11px; letter-spacing: 1px; color: #d8a13a; white-space: nowrap; }
-  .stars .star-off { color: var(--border); }
+  /* barra de alinhamento (vermelho→violeta) */
+  .abar { display: inline-flex; gap: 2px; align-items: center; }
+  .abar .seg { width: 5px; height: 14px; border-radius: 2px; display: inline-block; }
+  .score .abar { flex-direction: column; gap: 2px; }
+  .score .abar .seg { width: 22px; height: 4px; }
+  .abar-filter .seg { width: 9px; height: 13px; cursor: pointer; transition: transform .1s; }
+  .abar-filter .seg:hover { transform: scaleY(1.25); }
+  .seg-pick { width: 30px; height: 16px; border: none; border-radius: 3px; cursor: pointer; padding: 0; }
   .period-seg { display: inline-flex; gap: 2px; }
   .seg-btn {
     font-family: var(--sans); font-size: 12px; color: var(--fg-tertiary);
@@ -286,7 +306,7 @@
 <div class="wrap">
   <header>
     <div class="topbar">
-      <div class="wordmark">Aspis</div>
+      <div class="wordmark"><img class="logo" src="logo.png" alt=""><span>Aspis</span></div>
       <div class="top-actions">
         <button class="acct-btn update-pill" id="app-update-btn" onclick="installUpdateFromTop()" style="display:none"></button>
         <button class="acct-btn" id="collections-btn" onclick="openCollections()"><span>Coleções</span></button>
@@ -354,6 +374,34 @@
   let minStars = 3;
   let rulesText = "";
 
+  // --- tema (auto / claro / escuro / terracota) ---
+  function applyTheme(t) {
+    const root = document.documentElement;
+    if (!t || t === "auto") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", t);
+    try { localStorage.setItem("aspis-theme", t || "auto"); } catch (e) {}
+  }
+  function currentTheme() {
+    try { return localStorage.getItem("aspis-theme") || "auto"; } catch (e) { return "auto"; }
+  }
+  applyTheme(currentTheme());  // aplica o quanto antes (evita flash)
+
+  // espectro de alinhamento: 0=vermelho (pior) → 5=violeta (melhor)
+  const ALIGN_COLORS = ["#e0443e", "#e8803a", "#e8c13a", "#5bb24a", "#3a86c8", "#8a5cc8"];
+  const ALIGN_LABELS = ["mínimo", "baixo", "médio", "bom", "alto", "máximo"];
+  function alignColor(n) { return ALIGN_COLORS[Math.max(0, Math.min(5, n))]; }
+
+  // barra de 6 segmentos: acende do 0 até n, cada um com sua cor do espectro
+  function alignBar(n) {
+    n = Math.max(0, Math.min(5, n || 0));
+    let segs = "";
+    for (let i = 0; i <= 5; i++) {
+      const on = i <= n;
+      segs += `<span class="seg" style="background:${on ? ALIGN_COLORS[i] : "var(--border)"}"></span>`;
+    }
+    return `<span class="abar" title="Alinhamento ${n}/5 (${ALIGN_LABELS[n]})">${segs}</span>`;
+  }
+
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
   function api() {
     if (window.pywebview && window.pywebview.api) return window.pywebview.api;
@@ -382,23 +430,23 @@
       c.appendChild(el);
     }
 
-    // filtro por estrelas: clique DIRETO na estrela N para exigir N★+.
-    // Clicar na estrela já selecionada (a N-ésima) zera o filtro (mostra tudo).
+    // filtro por alinhamento: clique no segmento N para exigir N+.
+    // Reclicar no atual = mostrar todos.
     const sf = document.createElement("div");
-    sf.className = "chip chip-stars";
-    sf.title = "Filtrar por estrelas — clique na estrela desejada";
-    let html = `<span class="chip-stars-ic">`;
-    for (let n = 1; n <= 5; n++) {
-      const cls = n <= minStars ? "fs on" : "fs";
-      html += `<span class="${cls}" data-n="${n}">★</span>`;
+    sf.className = "chip chip-align";
+    sf.title = "Filtrar por alinhamento — clique no nível mínimo desejado";
+    let html = `<span class="abar abar-filter">`;
+    for (let n = 0; n <= 5; n++) {
+      const on = n <= minStars && minStars > 0;
+      html += `<span class="seg" data-n="${n}" style="background:${on ? ALIGN_COLORS[n] : "var(--border)"}"></span>`;
     }
-    html += `</span> <span class="chip-stars-lbl">${minStars > 0 ? minStars + "★+" : "todos"}</span>`;
+    html += `</span> <span class="chip-stars-lbl">${minStars > 0 ? "≥ " + ALIGN_LABELS[minStars] : "todos"}</span>`;
     sf.innerHTML = html;
-    sf.querySelectorAll(".fs").forEach(st => {
+    sf.querySelectorAll(".seg").forEach(st => {
       st.onclick = async (e) => {
         e.stopPropagation();
         const n = parseInt(st.dataset.n, 10);
-        minStars = (n === minStars) ? 0 : n;   // reclicar a atual = mostrar todos
+        minStars = (n === minStars) ? 0 : n;   // reclicar o atual = mostrar todos
         try { await api().set_min_stars(minStars); } catch (err) {}
         expandedId = null; load();
       };
@@ -434,9 +482,8 @@
     const pill = `<span class="pill" style="background:${m.bg};color:${m.fg}">${esc(m.label)}</span>`;
     const cb = v.is_clickbait ? `<span class="clickbait-flag">· sensacionalista</span>` : "";
     const n = v.stars || 0;
-    const stars = `<span class="stars" title="${v.stars}/5">${"★".repeat(n)}<span class="star-off">${"★".repeat(5 - n)}</span></span>`;
     return `
-      <div class="score">${stars}</div>
+      <div class="score">${alignBar(n)}</div>
       <div>
         <div class="title">${esc(v.neutral_title)}</div>
         <div class="subline">
@@ -855,19 +902,35 @@
       objectivesSectionHtml() +
       rulesSectionHtml() +
       starsSectionHtml() +
+      themeSectionHtml() +
       geminiSectionHtml() +
       whisperSectionHtml() +
       updateSectionHtml();
   }
 
+  function themeSectionHtml() {
+    const cur = currentTheme();
+    const opt = (v, label) => `<button class="seg-btn ${cur===v?"active":""}" onclick="setTheme('${v}')">${label}</button>`;
+    return `<div class="section">
+      <div class="sec-title">Tema</div>
+      <div class="sub">Aparência do app.</div>
+      <div class="period-seg" style="margin-top:8px">
+        ${opt("auto","Automático")}${opt("light","Claro")}${opt("dark","Escuro")}${opt("terra","Terracota")}
+      </div>
+    </div>`;
+  }
+
+  function setTheme(t) { applyTheme(t); renderPanel(); }
+
   function starsSectionHtml() {
     const cur = minStars;
-    const star = (n) => `<button class="star-pick ${n <= cur ? "on" : ""}" onclick="setMinStars(${n})" title="${n}★">★</button>`;
+    const seg = (n) => `<button class="seg-pick ${n <= cur && cur > 0 ? "on" : ""}" onclick="setMinStars(${n})"
+        title="${ALIGN_LABELS[n]}" style="background:${(n <= cur && cur > 0) ? ALIGN_COLORS[n] : "var(--border)"}"></button>`;
     return `<div class="section">
       <div class="sec-title">Mostrar a partir de</div>
-      <div class="sub">Só vídeos com pelo menos estas estrelas aparecem na lista. Menos estrelas = mostra mais.</div>
-      <div class="star-row">${[1,2,3,4,5].map(star).join("")}
-        <span class="thr-val">${cur}★+</span></div>
+      <div class="sub">Só vídeos com alinhamento a partir deste nível aparecem na lista. Menor = mostra mais. Vermelho = pior, violeta = melhor.</div>
+      <div class="star-row">${[0,1,2,3,4,5].map(seg).join("")}
+        <span class="thr-val">${cur > 0 ? "≥ " + ALIGN_LABELS[cur] : "todos"}</span></div>
       <div class="note" id="stars-note"></div>
     </div>`;
   }

@@ -18,7 +18,7 @@ import version  # fonte única da versão
 APP = ["app.py"]
 
 DATA_FILES = [
-    ("ui", ["ui/index.html"]),
+    ("ui", ["ui/index.html", "ui/logo.png"]),
     ("", ["config.yaml"]),
 ]
 
