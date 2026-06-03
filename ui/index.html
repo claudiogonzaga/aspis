@@ -172,6 +172,8 @@
   /* Conta / configurações */
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .top-actions { display: flex; align-items: center; gap: 8px; }
+  .gear-btn { padding: 4px 9px; font-size: 15px; line-height: 1; }
+  .gear-btn:hover { color: var(--fg); }
   .update-pill { color: #fff; background: #c8651e; border-color: #c8651e; font-weight: 500; }
   .update-pill:hover { background: #b25718; }
   .update-pill:disabled { opacity: 0.7; }
@@ -289,7 +291,8 @@
         <button class="acct-btn update-pill" id="app-update-btn" onclick="installUpdateFromTop()" style="display:none"></button>
         <button class="acct-btn" id="collections-btn" onclick="openCollections()"><span>Coleções</span></button>
         <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
-        <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
+        <button class="acct-btn" id="acct-btn" onclick="openAccount()"><span>Conta</span></button>
+        <button class="acct-btn gear-btn" id="settings-btn" onclick="openSettings('all')" title="Configurações: objetivos, pesos, critérios da IA, estrelas, Gemini, Whisper e atualizações." aria-label="Configurações">⚙</button>
       </div>
     </div>
     <div class="meta">
@@ -786,7 +789,8 @@
     }
   }
 
-  async function openSettings() {
+  async function openSettings(mode) {
+    settingsMode = (mode === "account") ? "account" : "all";
     document.getElementById("overlay").classList.add("show");
     await refreshYtStatus();
     await refreshPilares();
@@ -795,8 +799,9 @@
     objDraft = pilares.map(p => ({ ...p }));
     renderPanel();
     // verifica atualizações em segundo plano (não bloqueia a abertura)
-    checkUpdate();
+    if (settingsMode === "all") checkUpdate();
   }
+  function openAccount() { return openSettings("account"); }
   function closeSettings() { document.getElementById("overlay").classList.remove("show"); }
 
   let _toastTimer = null;
@@ -832,18 +837,27 @@
     }
   }
 
+  let settingsMode = "all";   // "all" (engrenagem) | "account" (Conta)
+
   function renderPanel() {
     const p = document.getElementById("panel");
+    if (settingsMode === "account") {
+      p.innerHTML =
+        `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>
+         <h2>Conta</h2>` +
+        ytSectionHtml();
+      return;
+    }
+    // Configurações (engrenagem): preferências de curadoria + app
     p.innerHTML =
       `<button class="close" onclick="closeSettings()" aria-label="Fechar">×</button>
        <h2>Configurações</h2>` +
-      updateSectionHtml() +
-      geminiSectionHtml() +
-      starsSectionHtml() +
       objectivesSectionHtml() +
       rulesSectionHtml() +
+      starsSectionHtml() +
+      geminiSectionHtml() +
       whisperSectionHtml() +
-      ytSectionHtml();
+      updateSectionHtml();
   }
 
   function starsSectionHtml() {
