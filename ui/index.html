@@ -103,7 +103,10 @@
   .align-thumb { position: absolute; top: 50%; transform: translate(-50%,-50%);
     width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--bg);
     box-shadow: 0 1px 4px rgba(0,0,0,.28); pointer-events: none; transition: left .12s; }
-  .chip-align { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+  .chip-align { display: none; }   /* removido dos chips, vive na align-row agora */
+  .align-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; user-select: none; }
+  .align-lbl { font-size: 11px; color: var(--fg-tertiary); white-space: nowrap; flex-shrink: 0; }
+  .align-row .align-track { flex: 1 1 auto; height: 7px; }
   .seg-pick { width: 30px; height: 16px; border: none; border-radius: 3px; cursor: pointer; padding: 0; }
   .period-seg { display: inline-flex; gap: 2px; }
   .seg-btn {
@@ -324,6 +327,7 @@
       <span class="period-seg" id="period-seg"></span>
     </div>
     <div class="chips" id="chips"></div>
+    <div class="align-row" id="align-row"></div>
   </header>
 
   <div class="list" id="list"></div>
@@ -429,36 +433,62 @@
       el.onclick = () => { activeFilter = p.key; expandedId = null; load(); };
       c.appendChild(el);
     }
-
-    // filtro: gradiente contínuo (vermelho→violeta) clicável — marcar o mínimo
-    const sf = document.createElement("div");
-    sf.className = "chip chip-align";
-    sf.title = "Filtrar por alinhamento — clique no ponto mínimo desejado";
-    const pct = minStars > 0 ? Math.round(((minStars - 0.5) / 5) * 100) : 0;
-    const thumbColor = minStars > 0 ? ALIGN_COLORS[minStars] : "var(--fg-tertiary)";
-    sf.innerHTML = `
-      <div class="align-track" id="align-track">
-        <div class="align-track-mask" style="width:${pct}%"></div>
-        <div class="align-thumb" style="left:${pct}%;background:${thumbColor}"></div>
-      </div>
-      <span class="chip-stars-lbl">${minStars > 0 ? "≥ " + ALIGN_LABELS[minStars] : "todos"}</span>`;
-    sf.querySelector(".align-track").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const rect = e.currentTarget.getBoundingClientRect();
-      const ratio = (e.clientX - rect.left) / rect.width;
-      const n = Math.max(0, Math.min(5, Math.round(ratio * 5)));
-      minStars = (n === minStars) ? 0 : n;
-      try { await api().set_min_stars(minStars); } catch (err) {}
-      expandedId = null; load();
-    });
-    c.appendChild(sf);
-
-    // toggle para mostrar/ocultar os lidos
+    // toggle lidos
     const r = document.createElement("div");
     r.className = "chip chip-read" + (showRead ? " active" : "");
     r.textContent = showRead ? "Ocultar lidos" : "Mostrar lidos";
     r.onclick = () => { showRead = !showRead; expandedId = null; load(); };
     c.appendChild(r);
+    renderAlignRow();
+  }
+
+  function renderAlignRow() {
+    const row = document.getElementById("align-row");
+    if (!row) return;
+    const pct = minStars > 0 ? Math.round(((minStars - 0.5) / 5) * 100) : 0;
+    const thumbColor = minStars > 0 ? ALIGN_COLORS[minStars] : "var(--fg-tertiary)";
+    row.innerHTML = `
+      <span class="align-lbl">não alinhado</span>
+      <div class="align-track" id="align-track-main">
+        <div class="align-track-mask" style="width:${pct}%"></div>
+        <div class="align-thumb" style="left:${pct}%;background:${thumbColor}"></div>
+      </div>
+      <span class="align-lbl">muito alinhado</span>`;
+    const track = row.querySelector(".align-track");
+    // clique: move o thumb para o ponto clicado
+    track.addEventListener("click", async (e) => {
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const n = Math.round(ratio * 5);
+      minStars = (n === minStars) ? 0 : n;
+      try { await api().set_min_stars(minStars); } catch (err) {}
+      expandedId = null; load();
+    });
+    // arrastar: atualiza em tempo real enquanto arrasta
+    let dragging = false;
+    track.addEventListener("mousedown", () => { dragging = true; });
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const n = Math.round(ratio * 5);
+      if (n !== minStars) {
+        minStars = n;
+        // atualiza o visual imediatamente sem reload completo
+        const newPct = n > 0 ? Math.round(((n - 0.5) / 5) * 100) : 0;
+        const tc = n > 0 ? ALIGN_COLORS[n] : "var(--fg-tertiary)";
+        track.querySelector(".align-track-mask").style.width = newPct + "%";
+        const thumb = track.querySelector(".align-thumb");
+        thumb.style.left = newPct + "%";
+        thumb.style.background = tc;
+      }
+    });
+    document.addEventListener("mouseup", async () => {
+      if (!dragging) return;
+      dragging = false;
+      try { await api().set_min_stars(minStars); } catch (err) {}
+      expandedId = null; load();
+    });
   }
 
   function renderPeriod() {
