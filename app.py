@@ -269,6 +269,37 @@ class Api:
         store.delete_qa(qa_id)
         return {"ok": True}
 
+    # --- coleções (playlists / blocos de notas) ---
+    def list_collections(self):
+        return store.list_collections()
+
+    def create_collection(self, name):
+        return {"ok": True, "id": store.create_collection(name)}
+
+    def rename_collection(self, cid, name):
+        store.rename_collection(cid, name)
+        return {"ok": True}
+
+    def delete_collection(self, cid):
+        store.delete_collection(cid)
+        return {"ok": True}
+
+    def get_collection(self, cid):
+        return store.get_collection(cid)
+
+    def add_to_collection(self, cid, item_type, video_id, qa_id=None):
+        if item_type not in ("video", "resumo", "qa"):
+            return {"ok": False, "error": "tipo inválido"}
+        item_id = store.add_to_collection(cid, item_type, video_id, qa_id=qa_id)
+        return {"ok": True, "item_id": item_id}
+
+    def remove_collection_item(self, item_id):
+        store.remove_collection_item(item_id)
+        return {"ok": True}
+
+    def collections_for_video(self, video_id):
+        return store.collections_for_video(video_id)
+
     # --- conta do YouTube (login multi-canal dentro do app) ---
     def yt_status(self):
         import accounts

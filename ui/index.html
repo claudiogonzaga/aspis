@@ -270,6 +270,14 @@
   .star-pick.on { color: #d8a13a; }
   .star-row .thr-val { margin-left: 8px; color: var(--fg-secondary); }
   .obj-q, .obj-n { margin-top: 6px; }
+  .qa-save { margin-top: 6px; font-size: 11px; }
+  .ci-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .ci { padding: 12px; border: 0.5px solid var(--border); border-radius: 10px; position: relative; user-select: text; }
+  .ci-kind { font-size: 11px; color: var(--fg-tertiary); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .ci-title { font-size: 14px; font-weight: 600; color: var(--fg); }
+  .ci-sub { font-size: 12px; color: var(--fg-secondary); margin-bottom: 4px; }
+  .ci-text { font-size: 13px; color: var(--fg-secondary); line-height: 1.5; }
+  .ci-rm { position: absolute; top: 10px; right: 10px; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -279,6 +287,7 @@
       <div class="wordmark">Aspis</div>
       <div class="top-actions">
         <button class="acct-btn update-pill" id="app-update-btn" onclick="installUpdateFromTop()" style="display:none"></button>
+        <button class="acct-btn" id="collections-btn" onclick="openCollections()"><span>Coleções</span></button>
         <button class="acct-btn" id="refresh-btn" onclick="doRefresh()"><span>↻ Atualizar</span></button>
         <button class="acct-btn" id="acct-btn" onclick="openSettings()"><span>Conta</span></button>
       </div>
@@ -298,6 +307,10 @@
 
 <div class="overlay" id="overlay" onclick="if (event.target === this) closeSettings()">
   <div class="panel" id="panel"></div>
+</div>
+
+<div class="overlay" id="coll-overlay" onclick="if (event.target === this) closeColl()">
+  <div class="panel" id="coll-panel"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -457,6 +470,7 @@
           ${b("downloaded", "Baixar", "✓ Baixado", "download", "Baixa o vídeo em MP4 para ~/Aspis/Downloads (para assistir offline).")}
           ${b("sent_android", "Enviar p/ Android", "✓ No Android", "android", "Baixa (se preciso) e copia o MP4 para ~/Aspis/ParaAndroid. Aponte o Syncthing para essa pasta e o vídeo aparece no celular.")}
           ${b("read", "Marcar lido", "✓ Lido", "read", "Marca como lido: some da lista principal (volta com o filtro 'Mostrar lidos').")}
+          <button class="btn" data-action="collect" title="Salvar o vídeo (e/ou seu resumo) numa coleção / bloco de notas.">+ Coleção</button>
           <button class="reveal" data-action="reveal" title="Mostra o título original (sensacionalista) do YouTube, antes da neutralização.">título original</button>
         </div>
         <div class="hint">Passe o mouse sobre os botões para ver o que cada um faz.</div>
@@ -493,6 +507,7 @@
       <div class="qa">
         <div class="qa-q">${esc(qa.question)}</div>
         <div class="qa-a">${mdLite(qa.answer)}</div>
+        <button class="lnk qa-save" onclick="collectQa('${videoId}', ${qa.id})">+ salvar em coleção</button>
       </div>`).join("");
   }
 
@@ -527,6 +542,150 @@
     } finally {
       inp.disabled = false; inp.focus();
     }
+  }
+
+  // ============ Coleções (playlists / blocos de notas) ============
+  // picker: escolher coleção(ões) para um item (vídeo, resumo ou qa)
+  let pickerCtx = null;  // {video_id, kinds:[...], qa_id?}
+
+  async function openPicker(ctx) {
+    pickerCtx = ctx;
+    const panel = document.getElementById("coll-panel");
+    document.getElementById("coll-overlay").classList.add("show");
+    panel.innerHTML = `<div class="empty">Carregando…</div>`;
+    await renderPicker();
+  }
+  function closeColl() { document.getElementById("coll-overlay").classList.remove("show"); pickerCtx = null; }
+
+  async function renderPicker() {
+    const a = api(); const panel = document.getElementById("coll-panel");
+    let cols = []; try { cols = await a.list_collections(); } catch (e) {}
+    const ctx = pickerCtx;
+    const kindLabel = { video: "vídeo", resumo: "resumo", qa: "esta resposta" };
+    const kinds = ctx.kinds.map(k =>
+      `<label class="wcheck"><input type="checkbox" class="pk-kind" value="${k}" ${k==="video"||ctx.kinds.length===1?"checked":""}> Salvar ${kindLabel[k]}</label>`
+    ).join("");
+    const list = cols.length ? cols.map(c =>
+      `<div class="chan" style="cursor:pointer" onclick="pickInto(${c.id})">
+         <div class="info"><div class="nm">${esc(c.name)}</div><div class="hd">${c.n} ${c.n===1?"item":"itens"}</div></div>
+         <button class="lnk">adicionar →</button>
+       </div>`).join("") : `<div class="sub">Você ainda não tem coleções.</div>`;
+    panel.innerHTML =
+      `<button class="close" onclick="closeColl()" aria-label="Fechar">×</button>
+       <h2>Salvar em coleção</h2>
+       <div class="section" style="border:none;padding-top:0">
+         ${kinds}
+       </div>
+       <div class="section"><div class="sec-title">Suas coleções</div>${list}</div>
+       <div class="section">
+         <div class="key-row">
+           <input class="inp" id="new-coll-name" placeholder="Nova coleção…">
+           <button class="primary" onclick="createAndPick()">Criar e adicionar</button>
+         </div>
+       </div>
+       <div class="note ok" id="pick-note"></div>`;
+  }
+
+  function _selectedKinds() {
+    return Array.from(document.querySelectorAll(".pk-kind:checked")).map(e => e.value);
+  }
+
+  async function pickInto(cid) {
+    const a = api(); const ctx = pickerCtx; if (!ctx) return;
+    const kinds = _selectedKinds();
+    if (!kinds.length) { flash("Marque o que salvar."); return; }
+    try {
+      for (const k of kinds) {
+        await a.add_to_collection(cid, k, ctx.video_id, k === "qa" ? ctx.qa_id : null);
+      }
+      const note = document.getElementById("pick-note");
+      if (note) note.textContent = "✓ adicionado.";
+      await renderPicker();
+    } catch (e) { flash(String(e)); }
+  }
+
+  async function createAndPick() {
+    const a = api();
+    const name = (document.getElementById("new-coll-name").value || "").trim();
+    if (!name) return;
+    try { const r = await a.create_collection(name); await pickInto(r.id); }
+    catch (e) { flash(String(e)); }
+  }
+
+  function collectVideo(v) {
+    openPicker({ video_id: v.video_id, kinds: ["video", "resumo"] });
+  }
+  function collectQa(videoId, qaId) {
+    openPicker({ video_id: videoId, kinds: ["qa"], qa_id: qaId });
+  }
+
+  // tela de navegação das coleções
+  async function openCollections() {
+    document.getElementById("coll-overlay").classList.add("show");
+    pickerCtx = null;
+    await renderCollectionsList();
+  }
+
+  async function renderCollectionsList() {
+    const a = api(); const panel = document.getElementById("coll-panel");
+    let cols = []; try { cols = await a.list_collections(); } catch (e) {}
+    const list = cols.length ? cols.map(c =>
+      `<div class="chan" style="cursor:pointer">
+         <div class="info" onclick="openCollection(${c.id})">
+           <div class="nm">${esc(c.name)}</div><div class="hd">${c.n} ${c.n===1?"item":"itens"}</div>
+         </div>
+         <button class="lnk" onclick="openCollection(${c.id})">abrir →</button>
+         <button class="lnk" onclick="delCollection(${c.id}, '${esc(c.name).replace(/'/g,"")}')">excluir</button>
+       </div>`).join("") : `<div class="onboard">Nenhuma coleção ainda. Salve vídeos, resumos ou respostas a partir dos cards.</div>`;
+    panel.innerHTML =
+      `<button class="close" onclick="closeColl()" aria-label="Fechar">×</button>
+       <h2>Coleções</h2>
+       <div class="sub">Seus blocos de notas: vídeos, resumos e conversas guardados.</div>
+       ${list}
+       <div class="section">
+         <div class="key-row">
+           <input class="inp" id="new-coll-top" placeholder="Nova coleção…">
+           <button class="primary" onclick="createCollTop()">Criar</button>
+         </div>
+       </div>`;
+  }
+
+  async function createCollTop() {
+    const a = api();
+    const name = (document.getElementById("new-coll-top").value || "").trim();
+    if (!name) return;
+    try { await a.create_collection(name); await renderCollectionsList(); } catch (e) { flash(String(e)); }
+  }
+
+  async function delCollection(cid, name) {
+    if (!confirm(`Excluir a coleção "${name}"? Os itens são removidos da coleção (os vídeos continuam no app).`)) return;
+    try { await api().delete_collection(cid); await renderCollectionsList(); } catch (e) { flash(String(e)); }
+  }
+
+  async function openCollection(cid) {
+    const a = api(); const panel = document.getElementById("coll-panel");
+    let col = null; try { col = await a.get_collection(cid); } catch (e) {}
+    if (!col) { renderCollectionsList(); return; }
+    const items = (col.items || []).map(it => {
+      let body = "";
+      if (it.item_type === "video")
+        body = `<div class="ci-kind">▶ vídeo</div><div class="ci-title">${esc(it.video_title)}</div><div class="ci-sub">${esc(it.video_channel)}</div>`;
+      else if (it.item_type === "resumo")
+        body = `<div class="ci-kind">≡ resumo</div><div class="ci-sub">${esc(it.video_title)}</div><div class="ci-text">${esc(it.text||"")}</div>`;
+      else
+        body = `<div class="ci-kind">? conversa</div><div class="ci-sub">${esc(it.video_title)}</div><div class="qa-q">${esc(it.question||"")}</div><div class="qa-a">${mdLite(it.answer||"")}</div>`;
+      return `<div class="ci">${body}<button class="lnk ci-rm" onclick="rmItem(${it.id}, ${cid})">remover</button></div>`;
+    }).join("");
+    panel.innerHTML =
+      `<button class="close" onclick="closeColl()" aria-label="Fechar">×</button>
+       <button class="lnk" onclick="renderCollectionsList()">← coleções</button>
+       <h2 style="margin-top:6px">${esc(col.name)}</h2>
+       <div class="sub">${(col.items||[]).length} itens</div>
+       <div class="ci-list">${items || '<div class="onboard">Coleção vazia.</div>'}</div>`;
+  }
+
+  async function rmItem(itemId, cid) {
+    try { await api().remove_collection_item(itemId); await openCollection(cid); } catch (e) { flash(String(e)); }
   }
 
   function wireRow(rowEl, v) {
@@ -591,6 +750,7 @@
       if (action === "obsidian") { await a.save_obsidian(v.video_id); v.saved_obsidian = 1; }
       if (action === "anki")     { await a.save_anki(v.video_id);     v.saved_anki = 1; }
       if (action === "download") { await a.download(v.video_id);      v.downloaded = 1; }
+      if (action === "collect") { collectVideo(v); return; }
       if (action === "read") {
         const novo = v.read ? 0 : 1;
         await a.set_read(v.video_id, novo);

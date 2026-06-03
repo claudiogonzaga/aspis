@@ -38,6 +38,22 @@ CREATE TABLE IF NOT EXISTS qa (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_qa_video ON qa(video_id, id);
+-- coleções (playlists / blocos de notas) e seus itens (muitos-para-muitos)
+CREATE TABLE IF NOT EXISTS collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS collection_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_id INTEGER NOT NULL,
+    item_type TEXT NOT NULL,        -- 'video' | 'resumo' | 'qa'
+    video_id TEXT,                  -- vídeo de origem (sempre presente)
+    qa_id INTEGER,                  -- quando item_type='qa'
+    note TEXT,                      -- anotação livre opcional do usuário
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ci_coll ON collection_items(collection_id, id);
 """
 
 # Colunas que viajam como JSON (lista/objeto) entre o banco e o resto do app.
@@ -219,6 +235,113 @@ def get_qa(video_id):
 def delete_qa(qa_id):
     with _connect() as conn:
         conn.execute("DELETE FROM qa WHERE id = ?", (qa_id,))
+
+
+def get_qa_one(qa_id):
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, video_id, question, answer, created_at FROM qa WHERE id = ?",
+            (qa_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# --- coleções (playlists / blocos de notas) ---------------------------------
+def create_collection(name):
+    name = (name or "").strip() or "Sem título"
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO collections (name, created_at) VALUES (?, ?)", (name, now_iso())
+        )
+        return cur.lastrowid
+
+
+def rename_collection(cid, name):
+    with _connect() as conn:
+        conn.execute("UPDATE collections SET name = ? WHERE id = ?",
+                     ((name or "").strip() or "Sem título", cid))
+
+
+def delete_collection(cid):
+    with _connect() as conn:
+        conn.execute("DELETE FROM collection_items WHERE collection_id = ?", (cid,))
+        conn.execute("DELETE FROM collections WHERE id = ?", (cid,))
+
+
+def list_collections():
+    """Coleções com contagem de itens, mais recentes primeiro."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.name, c.created_at, "
+            "  (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS n "
+            "FROM collections c ORDER BY c.id DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_to_collection(cid, item_type, video_id, qa_id=None, note=None):
+    """Adiciona um item à coleção. Evita duplicar o mesmo (tipo, vídeo, qa)."""
+    with _connect() as conn:
+        dup = conn.execute(
+            "SELECT id FROM collection_items WHERE collection_id=? AND item_type=? "
+            "AND IFNULL(video_id,'')=IFNULL(?, '') AND IFNULL(qa_id,0)=IFNULL(?,0)",
+            (cid, item_type, video_id, qa_id),
+        ).fetchone()
+        if dup:
+            return dup[0]
+        cur = conn.execute(
+            "INSERT INTO collection_items (collection_id, item_type, video_id, qa_id, note, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (cid, item_type, video_id, qa_id, note, now_iso()),
+        )
+        return cur.lastrowid
+
+
+def remove_collection_item(item_id):
+    with _connect() as conn:
+        conn.execute("DELETE FROM collection_items WHERE id = ?", (item_id,))
+
+
+def get_collection(cid):
+    """Coleção com seus itens já resolvidos (título do vídeo, resumo, Q&A)."""
+    with _connect() as conn:
+        crow = conn.execute(
+            "SELECT id, name, created_at FROM collections WHERE id = ?", (cid,)
+        ).fetchone()
+        if not crow:
+            return None
+        rows = conn.execute(
+            "SELECT id, item_type, video_id, qa_id, note, created_at "
+            "FROM collection_items WHERE collection_id = ? ORDER BY id",
+            (cid,),
+        ).fetchall()
+    items = []
+    for r in rows:
+        d = dict(r)
+        v = get_video(d["video_id"]) if d.get("video_id") else None
+        d["video_title"] = (v or {}).get("neutral_title") or (v or {}).get("original_title") or ""
+        d["video_channel"] = (v or {}).get("channel", "")
+        d["video_url"] = (v or {}).get("url", "")
+        if d["item_type"] == "resumo":
+            d["text"] = (v or {}).get("resumo", "")
+        elif d["item_type"] == "qa" and d.get("qa_id"):
+            qa = get_qa_one(d["qa_id"])
+            d["question"] = (qa or {}).get("question", "")
+            d["answer"] = (qa or {}).get("answer", "")
+        items.append(d)
+    out = dict(crow)
+    out["items"] = items
+    return out
+
+
+def collections_for_video(video_id):
+    """IDs das coleções que contêm algo deste vídeo (para marcar na UI)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT collection_id FROM collection_items WHERE video_id = ?",
+            (video_id,),
+        ).fetchall()
+    return [r[0] for r in rows]
 
 
 def get_meta(key, default=None):
