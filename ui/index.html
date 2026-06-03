@@ -85,22 +85,25 @@
 
   .list { margin-top: 8px; }
   .row {
-    display: grid; grid-template-columns: 58px 1fr; column-gap: 14px;
+    display: grid; grid-template-columns: 20px 1fr; column-gap: 16px;
     padding: 16px 4px; border-top: 0.5px solid var(--border);
     cursor: pointer;
   }
   .list .row:last-child { border-bottom: 0.5px solid var(--border); }
   .row:hover { background: var(--hover); }
-  .score {
-    display: flex; justify-content: flex-end; padding-top: 4px;
-  }
-  /* barra de alinhamento (vermelho→violeta) */
-  .abar { display: inline-flex; gap: 2px; align-items: center; }
-  .abar .seg { width: 5px; height: 14px; border-radius: 2px; display: inline-block; }
-  .score .abar { flex-direction: column; gap: 2px; }
-  .score .abar .seg { width: 22px; height: 4px; }
-  .abar-filter .seg { width: 9px; height: 13px; cursor: pointer; transition: transform .1s; }
-  .abar-filter .seg:hover { transform: scaleY(1.25); }
+  .score { display: flex; justify-content: flex-end; align-items: flex-start; padding-top: 6px; }
+  /* alinhamento: ponto de cor por card */
+  .align-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+  /* gradiente contínuo no filtro */
+  .align-track { position: relative; height: 6px; border-radius: 3px;
+    background: linear-gradient(to right, #e0443e, #e8803a, #e8c13a, #5bb24a, #3a86c8, #8a5cc8);
+    cursor: pointer; flex: 1 1 auto; }
+  .align-track-mask { position: absolute; top:0; left:0; height:100%; border-radius:3px 0 0 3px;
+    background: var(--bg); opacity: .72; pointer-events: none; transition: width .12s; }
+  .align-thumb { position: absolute; top: 50%; transform: translate(-50%,-50%);
+    width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--bg);
+    box-shadow: 0 1px 4px rgba(0,0,0,.28); pointer-events: none; transition: left .12s; }
+  .chip-align { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
   .seg-pick { width: 30px; height: 16px; border: none; border-radius: 3px; cursor: pointer; padding: 0; }
   .period-seg { display: inline-flex; gap: 2px; }
   .seg-btn {
@@ -391,15 +394,12 @@
   const ALIGN_LABELS = ["mínimo", "baixo", "médio", "bom", "alto", "máximo"];
   function alignColor(n) { return ALIGN_COLORS[Math.max(0, Math.min(5, n))]; }
 
-  // barra de 6 segmentos: acende do 0 até n, cada um com sua cor do espectro
+  // ponto de cor único: vermelho (0) → violeta (5)
   function alignBar(n) {
     n = Math.max(0, Math.min(5, n || 0));
-    let segs = "";
-    for (let i = 0; i <= 5; i++) {
-      const on = i <= n;
-      segs += `<span class="seg" style="background:${on ? ALIGN_COLORS[i] : "var(--border)"}"></span>`;
-    }
-    return `<span class="abar" title="Alinhamento ${n}/5 (${ALIGN_LABELS[n]})">${segs}</span>`;
+    const color = alignColor(n);
+    const label = ALIGN_LABELS[n];
+    return `<span class="align-dot" style="background:${color};box-shadow:0 0 6px ${color}66" title="${label} (${n}/5)"></span>`;
   }
 
   // Bridge: pywebview injects `pywebview.api`. We wait for it.
@@ -430,26 +430,26 @@
       c.appendChild(el);
     }
 
-    // filtro por alinhamento: clique no segmento N para exigir N+.
-    // Reclicar no atual = mostrar todos.
+    // filtro: gradiente contínuo (vermelho→violeta) clicável — marcar o mínimo
     const sf = document.createElement("div");
     sf.className = "chip chip-align";
-    sf.title = "Filtrar por alinhamento — clique no nível mínimo desejado";
-    let html = `<span class="abar abar-filter">`;
-    for (let n = 0; n <= 5; n++) {
-      const on = n <= minStars && minStars > 0;
-      html += `<span class="seg" data-n="${n}" style="background:${on ? ALIGN_COLORS[n] : "var(--border)"}"></span>`;
-    }
-    html += `</span> <span class="chip-stars-lbl">${minStars > 0 ? "≥ " + ALIGN_LABELS[minStars] : "todos"}</span>`;
-    sf.innerHTML = html;
-    sf.querySelectorAll(".seg").forEach(st => {
-      st.onclick = async (e) => {
-        e.stopPropagation();
-        const n = parseInt(st.dataset.n, 10);
-        minStars = (n === minStars) ? 0 : n;   // reclicar o atual = mostrar todos
-        try { await api().set_min_stars(minStars); } catch (err) {}
-        expandedId = null; load();
-      };
+    sf.title = "Filtrar por alinhamento — clique no ponto mínimo desejado";
+    const pct = minStars > 0 ? Math.round(((minStars - 0.5) / 5) * 100) : 0;
+    const thumbColor = minStars > 0 ? ALIGN_COLORS[minStars] : "var(--fg-tertiary)";
+    sf.innerHTML = `
+      <div class="align-track" id="align-track">
+        <div class="align-track-mask" style="width:${pct}%"></div>
+        <div class="align-thumb" style="left:${pct}%;background:${thumbColor}"></div>
+      </div>
+      <span class="chip-stars-lbl">${minStars > 0 ? "≥ " + ALIGN_LABELS[minStars] : "todos"}</span>`;
+    sf.querySelector(".align-track").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      const n = Math.max(0, Math.min(5, Math.round(ratio * 5)));
+      minStars = (n === minStars) ? 0 : n;
+      try { await api().set_min_stars(minStars); } catch (err) {}
+      expandedId = null; load();
     });
     c.appendChild(sf);
 
@@ -844,7 +844,7 @@
     try { const vp = await api().get_view_prefs(); minStars = vp.min_stars; period = vp.period; } catch (e) {}
     try { rulesText = (await api().get_rules()).rules; } catch (e) {}
     objDraft = pilares.map(p => ({ ...p }));
-    renderPanel();
+    renderPanel(); setTimeout(wireStarsTrack, 0);
     // verifica atualizações em segundo plano (não bloqueia a abertura)
     if (settingsMode === "all") checkUpdate();
   }
@@ -922,16 +922,35 @@
 
   function setTheme(t) { applyTheme(t); renderPanel(); }
 
+  // liga o gradiente de alinhamento nas Configurações após renderizar
+  function wireStarsTrack() {
+    const tr = document.getElementById("stars-track");
+    if (!tr) return;
+    tr.addEventListener("click", async (e) => {
+      const rect = tr.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      const n = Math.max(0, Math.min(5, Math.round(ratio * 5)));
+      minStars = (n === minStars) ? 0 : n;
+      try { const r = await api().set_min_stars(minStars); } catch (e) {}
+      renderPanel(); setTimeout(wireStarsTrack, 0); load();
+    });
+  }
+
   function starsSectionHtml() {
     const cur = minStars;
-    const seg = (n) => `<button class="seg-pick ${n <= cur && cur > 0 ? "on" : ""}" onclick="setMinStars(${n})"
-        title="${ALIGN_LABELS[n]}" style="background:${(n <= cur && cur > 0) ? ALIGN_COLORS[n] : "var(--border)"}"></button>`;
+    const pct = cur > 0 ? Math.round(((cur - 0.5) / 5) * 100) : 0;
+    const thumbColor = cur > 0 ? ALIGN_COLORS[cur] : "var(--fg-tertiary)";
     return `<div class="section">
-      <div class="sec-title">Mostrar a partir de</div>
-      <div class="sub">Só vídeos com alinhamento a partir deste nível aparecem na lista. Menor = mostra mais. Vermelho = pior, violeta = melhor.</div>
-      <div class="star-row">${[0,1,2,3,4,5].map(seg).join("")}
-        <span class="thr-val">${cur > 0 ? "≥ " + ALIGN_LABELS[cur] : "todos"}</span></div>
-      <div class="note" id="stars-note"></div>
+      <div class="sec-title">Alinhamento mínimo</div>
+      <div class="sub">Arraste ou clique no gradiente para definir o nível mínimo de alinhamento exibido. Vermelho = menor, violeta = maior.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+        <div class="align-track align-track-settings" id="stars-track" style="height:8px">
+          <div class="align-track-mask" style="width:${pct}%"></div>
+          <div class="align-thumb" style="left:${pct}%;background:${thumbColor};width:16px;height:16px"></div>
+        </div>
+        <span class="thr-val" style="min-width:60px">${cur > 0 ? "≥ " + ALIGN_LABELS[cur] : "todos"}</span>
+      </div>
+      <div class="note ok" id="stars-note" style="margin-top:8px"></div>
     </div>`;
   }
 
