@@ -306,6 +306,22 @@
   .ci-sub { font-size: 12px; color: var(--fg-secondary); margin-bottom: 4px; }
   .ci-text { font-size: 13px; color: var(--fg-secondary); line-height: 1.5; }
   .ci-rm { position: absolute; top: 10px; right: 10px; font-size: 11px; }
+
+  /* Copiar texto (resumos, pontos-chave e respostas) */
+  .copywrap { position: relative; padding-right: 24px; }
+  .copy-btn {
+    position: absolute; top: 0; right: 0; line-height: 0;
+    background: none; border: none; cursor: pointer; padding: 3px;
+    border-radius: 6px; color: var(--fg-tertiary); opacity: .55;
+    transition: opacity .15s, color .15s, background .15s;
+  }
+  .copywrap:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: var(--fg); background: var(--hover); }
+  .copy-btn svg { width: 15px; height: 15px; display: block; }
+  .copy-btn .check { display: none; }
+  .copy-btn.ok { color: #2c8a3d; opacity: 1; }
+  .copy-btn.ok .ico { display: none; }
+  .copy-btn.ok .check { display: block; }
 </style>
 </head>
 <body>
@@ -421,6 +437,48 @@
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ---- Copiar texto ----
+  // botão com ícone de "copiar" (e um "check" que aparece ao copiar)
+  const COPY_ICON =
+    `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>` +
+    `<svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+  function copyBtn() {
+    return `<button class="copy-btn" type="button" title="Copiar texto" aria-label="Copiar texto" onclick="copyNode(this)">${COPY_ICON}</button>`;
+  }
+
+  // copia o texto dos elementos .copytarget dentro do .copywrap do botão
+  function copyNode(btn) {
+    const wrap = btn.closest(".copywrap");
+    if (!wrap) return;
+    const parts = [...wrap.querySelectorAll(".copytarget")]
+      .map(el => (el.innerText || "").trim()).filter(Boolean);
+    doCopy(parts.join("\n\n"), btn);
+  }
+
+  function doCopy(text, btn) {
+    const ok = () => {
+      btn.classList.add("ok");
+      btn.title = "Copiado!";
+      setTimeout(() => { btn.classList.remove("ok"); btn.title = "Copiar texto"; }, 1300);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, ok));
+    } else {
+      fallbackCopy(text, ok);
+    }
+  }
+
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand("copy"); ok(); }
+    catch (e) { flash("Não foi possível copiar."); }
+    document.body.removeChild(ta);
   }
 
   function renderChips() {
@@ -540,8 +598,11 @@
 
     return `
       <div class="synth">
-        <div class="resumo">${esc(v.resumo)}</div>
-        ${points ? `<ul class="points">${points}</ul>` : ""}
+        <div class="copywrap">
+          ${copyBtn()}
+          <div class="resumo copytarget">${esc(v.resumo)}</div>
+          ${points ? `<ul class="points copytarget">${points}</ul>` : ""}
+        </div>
         ${metaLine}
         <div class="actions">
           <button class="btn" data-action="watch" title="Baixa o vídeo e abre no player do seu Mac (não abre o YouTube). Fica salvo em ~/Aspis/Downloads.">Assistir</button>
@@ -584,9 +645,10 @@
     const box = document.getElementById("qa-" + videoId);
     if (!box) return;
     box.innerHTML = (items || []).map(qa => `
-      <div class="qa">
-        <div class="qa-q">${esc(qa.question)}</div>
-        <div class="qa-a">${mdLite(qa.answer)}</div>
+      <div class="qa copywrap">
+        ${copyBtn()}
+        <div class="qa-q copytarget">${esc(qa.question)}</div>
+        <div class="qa-a copytarget">${mdLite(qa.answer)}</div>
         <button class="lnk qa-save" onclick="collectQa('${videoId}', ${qa.id})">+ salvar em coleção</button>
       </div>`).join("");
   }
@@ -751,9 +813,11 @@
       if (it.item_type === "video")
         body = `<div class="ci-kind">▶ vídeo</div><div class="ci-title">${esc(it.video_title)}</div><div class="ci-sub">${esc(it.video_channel)}</div>`;
       else if (it.item_type === "resumo")
-        body = `<div class="ci-kind">≡ resumo</div><div class="ci-sub">${esc(it.video_title)}</div><div class="ci-text">${esc(it.text||"")}</div>`;
+        body = `<div class="ci-kind">≡ resumo</div><div class="ci-sub">${esc(it.video_title)}</div>`
+             + `<div class="copywrap">${copyBtn()}<div class="ci-text copytarget">${esc(it.text||"")}</div></div>`;
       else
-        body = `<div class="ci-kind">? conversa</div><div class="ci-sub">${esc(it.video_title)}</div><div class="qa-q">${esc(it.question||"")}</div><div class="qa-a">${mdLite(it.answer||"")}</div>`;
+        body = `<div class="ci-kind">? conversa</div><div class="ci-sub">${esc(it.video_title)}</div>`
+             + `<div class="copywrap">${copyBtn()}<div class="qa-q copytarget">${esc(it.question||"")}</div><div class="qa-a copytarget">${mdLite(it.answer||"")}</div></div>`;
       return `<div class="ci">${body}<button class="lnk ci-rm" onclick="rmItem(${it.id}, ${cid})">remover</button></div>`;
     }).join("");
     panel.innerHTML =
