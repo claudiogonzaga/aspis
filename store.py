@@ -135,6 +135,16 @@ def upsert_video(v):
         conn.execute(sql, [v.get(c) for c in cols])
 
 
+# Nota provisória (igual ao Android): vídeo triado só por título/descrição
+# (sem transcrição). Aparece no feed mesmo abaixo do limiar, marcado.
+PROVISIONAL = ("(COALESCE(source, 'youtube') = 'youtube' "
+               "AND COALESCE(transcript_available, 0) = 0)")
+
+
+def is_provisional(v):
+    return (v.get("source") or "youtube") == "youtube" and not v.get("transcript_available")
+
+
 def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False,
                since_iso=None, source=None):
     """Lista vídeos acima do limiar, ordenados por score desc.
@@ -142,7 +152,7 @@ def get_videos(filter_pillar=None, min_score=0, day=None, include_read=False,
     `since_iso` (ISO) filtra published_at >= since (janela do período).
     `include_read=False` (padrão) oculta os marcados como lidos.
     `source` ('youtube'|'x'), se informado, filtra pela origem."""
-    q = "SELECT * FROM videos WHERE score >= ?"
+    q = f"SELECT * FROM videos WHERE (score >= ? OR {PROVISIONAL})"
     args = [min_score]
     if source:
         q += " AND COALESCE(source, 'youtube') = ?"
@@ -181,16 +191,40 @@ def get_video(video_id):
     return _row_to_dict(row) if row else None
 
 
-def count_below(min_score, day=None, source=None):
-    """Quantos vídeos ficaram ABAIXO do limiar (para o rodapé)."""
-    q = "SELECT COUNT(*) FROM videos WHERE score < ?"
+def count_below(min_score, day=None, source=None, since_iso=None,
+                include_read=True, filter_pillar=None):
+    """Quantos vídeos ficaram ABAIXO do limiar (para o rodapé) — com os mesmos
+    filtros da lista, para o número bater com o que de fato apareceria. Os de
+    nota provisória não contam: esses já aparecem."""
+    q = f"SELECT COUNT(*) FROM videos WHERE score < ? AND NOT {PROVISIONAL}"
     args = [min_score]
     if source:
         q += " AND COALESCE(source, 'youtube') = ?"
         args.append(source)
+    if not include_read:
+        q += " AND COALESCE(read, 0) = 0"
+    if filter_pillar:
+        q += " AND pillar = ?"
+        args.append(filter_pillar)
     if day:
         q += " AND substr(published_at, 1, 10) = ?"
         args.append(day)
+    if since_iso:
+        q += " AND published_at >= ?"
+        args.append(since_iso)
+    with _connect() as conn:
+        return conn.execute(q, args).fetchone()[0]
+
+
+def count_outside_period(since_iso, wider_iso, min_score, source=None):
+    """Não lidos que passariam no limiar mas estão fora do período atual (e
+    dentro de `wider_iso`) — para o estado vazio sugerir ampliar o período."""
+    q = (f"SELECT COUNT(*) FROM videos WHERE (score >= ? OR {PROVISIONAL}) "
+         "AND COALESCE(read, 0) = 0 AND published_at < ? AND published_at >= ?")
+    args = [min_score, since_iso, wider_iso]
+    if source:
+        q += " AND COALESCE(source, 'youtube') = ?"
+        args.append(source)
     with _connect() as conn:
         return conn.execute(q, args).fetchone()[0]
 

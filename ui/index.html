@@ -223,6 +223,12 @@
     font-size: 12.5px; color: var(--fg-tertiary); text-align: center;
   }
   .empty { padding: 48px 8px; text-align: center; color: var(--fg-tertiary); font-size: 13px; }
+  .empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 14px; }
+  .prov-divider {
+    padding: 18px 8px 10px; text-align: center; font-size: 12px; color: var(--fg-tertiary);
+    border-top: 0.5px solid var(--border);
+  }
+  .foot-link { color: var(--fg-secondary); cursor: pointer; text-decoration: underline; }
 
   /* Conta / configurações */
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -471,14 +477,14 @@
   let activeFilter = null;
   let expandedId = null;
   let showRead = false;   // mostrar também os marcados como lidos
-  let period = "day";     // day | week | month
+  let period = "week";    // day | week | month
   let currentSource = "youtube";   // aba ativa: 'youtube' | 'x'
   let ytStatus = { client_configured: false, channels: [], active: null };
   let xStatus = { connected: false, account: null };
   let geminiStatus = { configured: false, masked: "", provider: "gemini" };
   let whisperStatus = { model: "base", enabled: false, auto_on_block: true, models: [], downloaded: [] };
   let updateStatus = {};   // {checking|error|current|latest|update_available|dmg_url}
-  let minStars = 2; // default = centro da escala Likert (50%)
+  let minStars = 1; // default = nível 1 (25%) — o centro (50%) deixava o feed quase vazio
   let rulesText = "";
 
   // --- tema (auto / claro / escuro / terracota) ---
@@ -666,10 +672,16 @@
     </div>`;
   }
 
+  // Nota provisória (igual ao Android): vídeo triado só por título/descrição.
+  function isProvisional(v) {
+    return (v.source || "youtube") === "youtube" && !v.transcript_available;
+  }
+
   function rowHtml(v) {
     const m = pillMeta[v.pillar] || pillMeta["nenhum"];
     const pill = `<span class="pill" style="background:${m.bg};color:${m.fg}">${esc(m.label)}</span>`;
     const cb = v.is_clickbait ? `<span class="clickbait-flag">· sensacionalista</span>` : "";
+    const prov = isProvisional(v) ? `<span class="clickbait-flag">· nota provisória</span>` : "";
     const n = v.stars || 0;
     // no X mostramos o @handle no lugar da duração (post não tem duração)
     const second = (v.source === "x")
@@ -686,7 +698,7 @@
         <div class="subline">
           <span>${esc(v.channel)}</span>
           ${secondBit}
-          ${pill}${cb}
+          ${pill}${cb}${prov}
         </div>
         <div class="synth-host"></div>
       </div>`;
@@ -699,6 +711,7 @@
     let metaBits = [];
     if (nFatos > 0) metaBits.push(`${nFatos} ${nFatos === 1 ? "fato" : "fatos"} para o Anki`);
     if (firstCite && firstCite.timestamp) metaBits.push(`trecho em ${esc(firstCite.timestamp)}`);
+    if (isProvisional(v)) metaBits.push("nota provisória — só título e descrição");
     const metaLine = metaBits.length ? `<div class="synth-meta">${metaBits.join(" · ")}</div>` : "";
 
     const b = (flag, label, labelDone, action, tip) =>
@@ -1788,11 +1801,44 @@
     let videos = [];
     try { videos = await a.get_videos(activeFilter, showRead, currentSource); } catch (e) { console.error(e); }
 
+    // quantos a régua/o período escondem (mesmos filtros da lista)
+    let below = 0, outside = 0;
+    try { below = await a.filtered_count(null, currentSource, activeFilter, showRead); } catch (e) {}
+
     list.innerHTML = "";
     if (!videos.length) {
-      list.innerHTML = `<div class="empty">${showRead ? "Nada por aqui." : "Nada por aqui — talvez tudo já esteja lido."}</div>`;
+      try { outside = await a.outside_period_count(currentSource); } catch (e) {}
+      const wider = period === "day" ? "week" : "month";
+      const acts = [];
+      if (below > 0) acts.push(`<div class="chip" data-empty="below">Ver ${below} abaixo do limiar</div>`);
+      if (outside > 0) acts.push(`<div class="chip" data-empty="wider">Ampliar para ${wider === "week" ? "Semana" : "Mês"}</div>`);
+      if (activeFilter) acts.push(`<div class="chip" data-empty="all">Todos os pilares</div>`);
+      if (!showRead) acts.push(`<div class="chip" data-empty="read">Mostrar lidos</div>`);
+      const msg = (below > 0 || outside > 0)
+        ? "Nada passou pelos filtros atuais."
+        : "Nada por aqui no período. Clique em ↻ Atualizar para buscar novidades.";
+      list.innerHTML = `<div class="empty">${msg}<div class="empty-actions">${acts.join("")}</div></div>`;
+      list.querySelectorAll("[data-empty]").forEach(el => {
+        el.onclick = async () => {
+          const k = el.dataset.empty;
+          expandedId = null;
+          if (k === "below") { minStars = 0; try { await a.set_min_stars(0); } catch (e) {} }
+          else if (k === "wider") { period = wider; try { await a.set_period(wider); } catch (e) {} }
+          else if (k === "all") { activeFilter = null; }
+          else if (k === "read") { showRead = true; }
+          load();
+        };
+      });
     }
-    for (const v of videos) {
+    // lista vem por score desc: daqui para baixo só há nota provisória abaixo do limiar
+    const firstProvBelow = videos.findIndex(v => (v.stars || 0) < minStars);
+    for (const [i, v] of videos.entries()) {
+      if (i === firstProvBelow) {
+        const d = document.createElement("div");
+        d.className = "prov-divider";
+        d.textContent = "Abaixo do limiar, mas com nota provisória (avaliados só por título e descrição).";
+        list.appendChild(d);
+      }
       const row = document.createElement("div");
       row.className = "row" + (v.read ? " is-read" : "");
       row.dataset.id = v.video_id;
@@ -1809,18 +1855,34 @@
         `${n} ${n === 1 ? "novo" : "novos"}`;
     } catch (e) {}
     try {
-      const f = await a.filtered_count(null, currentSource);
+      const f = videos.length ? below : 0;  // lista vazia: as saídas já estão no estado vazio
       let rc = 0;
       try { rc = await a.read_count(currentSource); } catch (e) {}
       const bits = [];
-      if (f > 0) bits.push(`${f} ${f === 1 ? itemWord + " filtrado" : itemWord + "s filtrados"} por não baterem com seus objetivos`);
+      if (f > 0) bits.push(`${f} ${f === 1 ? itemWord + " abaixo" : itemWord + "s abaixo"} do limiar · <span class="foot-link" id="foot-show-below">mostrar</span>`);
       if (rc > 0) bits.push(`${rc} ${rc === 1 ? "lido" : "lidos"}`);
-      document.getElementById("footer").textContent = bits.join(" · ");
+      const foot = document.getElementById("footer");
+      foot.innerHTML = bits.join(" · ");
+      const showBelow = document.getElementById("foot-show-below");
+      if (showBelow) showBelow.onclick = async () => {
+        minStars = 0; expandedId = null;
+        try { await a.set_min_stars(0); } catch (e) {}
+        load();
+      };
     } catch (e) {}
   }
 
   // pywebview signals readiness via this event; also poll as fallback.
-  function boot() { load(); checkUpdateSilent(); }
+  // Abrir o app já busca vídeos novos se a última busca foi há 2h+ (igual ao
+  // Android) — só com canal e chave configurados, para não abrir erro sozinho.
+  let autoRan = false;
+  async function maybeAutoRefresh() {
+    const a = api();
+    if (autoRan || !a) return;
+    autoRan = true;
+    try { if (await a.should_auto_refresh()) doRefresh(); } catch (e) {}
+  }
+  function boot() { load().then(maybeAutoRefresh); checkUpdateSilent(); }
   window.addEventListener("pywebviewready", boot);
   let tries = 0;
   const poll = setInterval(() => {

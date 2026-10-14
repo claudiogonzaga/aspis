@@ -13,9 +13,9 @@ set -euo pipefail
 
 BUNDLE="Aspis"          # nome do .app/executável (ASCII, p/ codesign)
 VOL="Aspis"             # nome de exibição do volume do .dmg
-VERSION="0.1.0"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="$HERE/.venv/bin/python"
+VERSION="$(cd "$HERE" && "$PY" -c 'import version; print(version.__version__)')"  # fonte única
 DIST="$HERE/dist"
 APP="$DIST/$BUNDLE.app"
 DMG="$DIST/$BUNDLE-$VERSION.dmg"

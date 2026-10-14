@@ -119,9 +119,22 @@ def _with_peso(pilares):
     return out
 
 
-def get_pilares():
-    """Pilares efetivos: ~/.aspis/pilares.json se existir; senão os do
-    config.yaml. Sempre com 'peso' normalizado."""
+# Pilar amplo (igual ao Aspis Android): conteúdo que ensina de verdade mas não
+# cabe nos outros pilares deixa de cair em "nenhum" com nota baixa.
+PILAR_APRENDIZADO = {
+    "nome": "Curiosidade e aprendizado",
+    "descricao": (
+        "Aprender algo de verdade fora dos outros pilares: ciência, história, "
+        "tecnologia, como as coisas funcionam, ideias bem argumentadas."
+    ),
+    "quero": ["explicações claras", "especialistas", "conteúdo com fontes",
+              "ensaios bem argumentados"],
+    "nao_quero": ["listas de curiosidades rasas", "react sem conteúdo", "polêmica vazia"],
+    "peso": 2,
+}
+
+
+def _read_pilares():
     if os.path.exists(USER_PILARES):
         try:
             with open(USER_PILARES, "r", encoding="utf-8") as fh:
@@ -129,6 +142,23 @@ def get_pilares():
         except (json.JSONDecodeError, OSError):
             pass
     return _with_peso(load().get("pilares", {}))
+
+
+def get_pilares():
+    """Pilares efetivos: ~/.aspis/pilares.json se existir; senão os do
+    config.yaml. Sempre com 'peso' normalizado.
+
+    Migração única: os pilares ganham o pilar amplo 'aprendizado' (se o usuário
+    apagá-lo depois, não volta)."""
+    pilares = _read_pilares()
+    prefs = _load_prefs()
+    if not prefs.get("pillars_v2"):
+        if "aprendizado" not in pilares:
+            pilares["aprendizado"] = dict(PILAR_APRENDIZADO)
+            save_pilares(pilares)
+        prefs["pillars_v2"] = True
+        _save_prefs(prefs)
+    return pilares
 
 
 def save_pilares(pilares):
@@ -143,13 +173,32 @@ USER_PREFS = os.path.join(USER_DIR, "prefs.json")
 
 
 def _load_prefs():
+    p = {}
     if os.path.exists(USER_PREFS):
         try:
             with open(USER_PREFS, "r", encoding="utf-8") as fh:
-                return json.load(fh)
+                p = json.load(fh)
         except (json.JSONDecodeError, OSError):
-            pass
-    return {}
+            p = {}
+    if not p.get("defaults_v2"):
+        _migrate_defaults_v2(p)
+    return p
+
+
+def _migrate_defaults_v2(p):
+    """Migração única (igual ao Android): quem ainda estava nos defaults antigos
+    (Dia + nível 2), que deixavam o feed quase vazio, passa para os novos
+    (Semana + nível 1); regras default antigas (nunca editadas) → as novas."""
+    if p.get("period") == "day" and p.get("min_stars") == 2:
+        p["period"] = DEFAULT_PERIOD
+        p["min_stars"] = DEFAULT_MIN_STARS
+    if p.get("rules") == LEGACY_DEFAULT_RULES:
+        del p["rules"]
+    p["defaults_v2"] = True
+    try:
+        _save_prefs(p)
+    except OSError:
+        pass
 
 
 def _save_prefs(p):
@@ -162,6 +211,12 @@ def _save_prefs(p):
 # Faixas de score → nível de alinhamento. Limiares simétricos (passo 25), com o
 # centro (nível 2) = score ≥ 50.
 STAR_MIN_SCORE = {0: 0, 1: 25, 2: 50, 3: 75, 4: 90}
+
+# Defaults de exibição (iguais ao Android). Alinhamento mínimo = nível 1 (25%):
+# o feed mostra bastante e a régua aperta se o usuário quiser — começar no
+# centro (50%) combinado com o período "Dia" deixava o feed quase vazio.
+DEFAULT_MIN_STARS = 1
+DEFAULT_PERIOD = "week"
 
 
 def score_to_stars(score):
@@ -182,8 +237,7 @@ def get_min_stars():
             return max(0, min(4, int(p["min_stars"])))
         except (TypeError, ValueError):
             pass
-    # default = centro da escala (nível 2 = 50%)
-    return 2
+    return DEFAULT_MIN_STARS
 
 
 def set_min_stars(value):
@@ -200,16 +254,18 @@ def get_threshold():
 
 # --- período (exibição + janela de busca) -----------------------------------
 PERIODS = {"day": 36, "week": 24 * 7, "month": 24 * 30}  # horas de lookback
+MAX_LOOKBACK_HOURS = 24 * 30  # busca cobre o tempo sem rodar, até 1 mês
+AUTO_REFRESH_AFTER_HOURS = 2  # abrir o app → busca se a última foi há 2h+
 
 
 def get_period():
-    p = _load_prefs().get("period", "day")
-    return p if p in PERIODS else "day"
+    p = _load_prefs().get("period", DEFAULT_PERIOD)
+    return p if p in PERIODS else DEFAULT_PERIOD
 
 
 def set_period(value):
     p = _load_prefs()
-    p["period"] = value if value in PERIODS else "day"
+    p["period"] = value if value in PERIODS else DEFAULT_PERIOD
     _save_prefs(p)
     return p["period"]
 
@@ -219,7 +275,23 @@ def period_lookback_hours():
 
 
 # --- regras gerais da IA (texto livre, editável) ----------------------------
+# Iguais ao Android: descontos GRADUAIS (a embalagem não condena um conteúdo
+# bom — dá para "resgatar") e opinião não é defeito por si só.
 DEFAULT_RULES = (
+    "Sensacionalismo (rage bait, isca de engajamento, promessas vazias, FOMO, CAPS, "
+    "emojis de alarme): marque is_clickbait e desconte aos poucos, conforme a "
+    "intensidade (em geral 5 a 15 pontos). A embalagem não decide a nota: se o "
+    "conteúdo entrega substância, a nota reflete a substância.\n"
+    "Priorize densidade de informação acionável e evidência sobre popularidade.\n"
+    "Opinião não é defeito: opinião qualificada (de quem entende do assunto, bem "
+    "argumentada ou baseada em evidências) vale como conteúdo. Desconte só o achismo "
+    "sem fundamento, e também aos poucos.\n"
+    "Entretenimento sem relação com os pilares vai para 'nenhum' com nota baixa, "
+    "mas sem zerar (em geral 10 a 20)."
+)
+
+# Regras default ANTERIORES — quem nunca as editou migra para as novas.
+LEGACY_DEFAULT_RULES = (
     "Penalize sensacionalismo: rage bait, isca de engajamento, promessas vazias, "
     "FOMO, CAPS, emojis de alarme — marque is_clickbait e reduza o score.\n"
     "Priorize densidade de informação acionável e evidência sobre popularidade.\n"

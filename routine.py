@@ -24,16 +24,24 @@ def _since(cfg, meta_key="last_run"):
     # meta_key separa as janelas das fontes (YouTube usa last_run; X, last_run_x).
     import config
 
-    hours = config.period_lookback_hours()
-    floor = datetime.now(timezone.utc) - timedelta(hours=hours)
+    now = datetime.now(timezone.utc)
+    floor = now - timedelta(hours=config.period_lookback_hours())
+    cap = now - timedelta(hours=config.MAX_LOOKBACK_HOURS)  # no máximo 1 mês
     last = store.get_meta(meta_key)
     if last:
         try:
             last_dt = datetime.fromisoformat(last)
-            return min(last_dt, floor)  # o que cobrir MAIS tempo
+            return max(cap, min(last_dt, floor))  # o que cobrir MAIS tempo
         except ValueError:
             pass
     return floor
+
+
+def _threshold():
+    # mesmo limiar da régua do app (não o score_threshold fixo do config.yaml)
+    import config
+
+    return config.get_threshold()
 
 
 def _youtube_row(v, analysis, tr):
@@ -107,7 +115,7 @@ def run(cfg=None, max_total=None):
     print(f"[routine] {len(videos)} vídeos novos retornados pela API")
 
     processed = filtered = skipped = errors = 0
-    threshold = cfg.get("score_threshold", 60)
+    threshold = _threshold()
 
     for v in videos:
         if max_total and processed >= max_total:
@@ -183,7 +191,7 @@ def run_x(cfg=None, max_total=None):
     print(f"[routine-x] {len(posts)} posts novos retornados pelo X")
 
     processed = filtered = skipped = errors = 0
-    threshold = cfg.get("score_threshold", 60)
+    threshold = _threshold()
 
     for p in posts:
         if max_total and processed >= max_total:
@@ -288,7 +296,7 @@ def add_link(url, cfg=None):
         return {"ok": True, "source": source, "video_id": item_id, "already": True}
 
     analysis = _add_youtube(item_id, cfg) if source == "youtube" else _add_x(item_id, cfg)
-    threshold = cfg.get("score_threshold", 60)
+    threshold = _threshold()
     return {
         "ok": True,
         "source": source,

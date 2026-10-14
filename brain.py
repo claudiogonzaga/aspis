@@ -28,7 +28,10 @@ do JSON permanecem como abaixo.
 Regras:
 - Classifique o vídeo no pilar mais alinhado, ou "nenhum" se não servir a nenhum.
 - Dê um score 0–100 de alinhamento aos objetivos do usuário (quanto realmente \
-entrega de valor para os pilares, não quão popular é).
+entrega de valor para os pilares, não quão popular é). Parta do valor do \
+CONTEÚDO; penalidades (sensacionalismo, achismo) são descontos GRADUAIS sobre \
+essa base, nunca uma sentença — um vídeo de embalagem ruim mas conteúdo bom \
+continua com nota boa.
 {regras_usuario}
 - neutral_title: reescreva o título no idioma original para algo neutro e informativo \
 (o que o vídeo realmente entrega), SEM CAPS, SEM emoji, SEM isca. Sentence case.
@@ -41,7 +44,9 @@ ou {"tipo":"cloze","texto":"... {{c1::lacuna}} ..."}.
 - citacoes: trechos curtos com timestamp "mm:ss" (use os timestamps da transcrição \
 quando houver). Lista vazia se não houver transcrição.
 - Se NÃO houver transcrição, ranqueie e reescreva o título usando título+descrição, \
-e deixe claro no resumo que ele é baseado só em metadados.
+e deixe claro no resumo que ele é baseado só em metadados. Essa nota é \
+provisória: dê o benefício da dúvida e não desconte por suspeita de enrolação \
+que você não pode verificar.
 
 Responda APENAS com o JSON, sem texto antes ou depois, neste formato exato:
 {
@@ -54,6 +59,8 @@ Responda APENAS com o JSON, sem texto antes ou depois, neste formato exato:
   "fatos_para_memorizar": [],
   "citacoes": [{"texto": "", "timestamp": "mm:ss"}]
 }"""
+
+DEFAULT_PILLAR_ENUM = "saude | investimento | paternidade | nenhum"
 
 MAX_OUTPUT_TOKENS = 4096  # 1500 truncava o JSON em transcrições longas (parse falhava)
 
@@ -109,7 +116,11 @@ def _system_text(cfg):
     regras = config.get_rules().strip()
     regras_fmt = "\n".join("- " + ln.strip() for ln in regras.splitlines() if ln.strip())
     head = SYSTEM_RULES.replace("{regras_usuario}", regras_fmt)
-    return head + "\n\n" + _pillars_block(config.get_pilares())
+    pilares = config.get_pilares()
+    # o enum do schema acompanha os pilares ATUAIS (pilares editados/novos valem
+    # na próxima análise — igual ao Android)
+    head = head.replace(DEFAULT_PILLAR_ENUM, " | ".join([*pilares.keys(), "nenhum"]))
+    return head + "\n\n" + _pillars_block(pilares)
 
 
 def _build_user_message(video, transcript, cfg):
@@ -302,12 +313,15 @@ MESMO IDIOMA ORIGINAL do post. NÃO traduza. As CHAVES do JSON permanecem como a
 Regras:
 - Classifique o post no pilar mais alinhado, ou "nenhum" se não servir a nenhum.
 - Dê um score 0–100 de alinhamento aos objetivos do usuário (quanto realmente \
-entrega de valor para os pilares, não quão viral/popular é).
+entrega de valor para os pilares, não quão viral/popular é). Parta do valor do \
+CONTEÚDO; penalidades são descontos GRADUAIS sobre essa base, nunca uma sentença.
 {regras_usuario}
-- O X premia indignação e isca de engajamento. Penalize com força: rage bait, \
-dunks, takes vazios, "thread 🧵" de coach, FOMO, autopromoção, polêmica fabricada. \
-Marque is_clickbait e reduza o score. Um post curto PODE ter score alto se for \
-denso e útil (um dado, um princípio, um link de valor).
+- O X premia indignação e isca de engajamento: rage bait, dunks, takes vazios, \
+"thread 🧵" de coach, FOMO, autopromoção, polêmica fabricada. Marque is_clickbait \
+e desconte aos poucos, conforme a intensidade — a embalagem não decide a nota. \
+Opinião qualificada (bem argumentada ou baseada em evidências) vale como \
+conteúdo. Um post curto PODE ter score alto se for denso e útil (um dado, um \
+princípio, um link de valor).
 - neutral_title: uma linha neutra e informativa no idioma original (o que o post \
 realmente diz), SEM CAPS, SEM emoji, SEM isca. Sentence case.
 - resumo: 1 a 3 frases, no idioma original. Para posts triviais, seja breve.

@@ -109,7 +109,7 @@ class Api:
 
         return {"ok": True, "rules": config.set_rules(text)}
 
-    def refresh(self, max_total=25):
+    def refresh(self, max_total=40):
         """Botão Atualizar: roda o pipeline na hora (busca novos → sintetiza →
         grava) e devolve um resumo. Exige um canal do YouTube conectado e a
         chave do Gemini. Limita a `max_total` vídeos novos por clique."""
@@ -210,8 +210,50 @@ class Api:
                 msg = "O serviço limitou agora — tente em instantes."
             return {"ok": False, "error": msg}
 
-    def filtered_count(self, day=None, source="youtube"):
-        return store.count_below(self.threshold, day=day, source=source)
+    def filtered_count(self, day=None, source="youtube", pillar=None, include_read=False):
+        # mesmos filtros da lista (período/lidos/pilar), só o score invertido
+        return store.count_below(
+            self.threshold, day=day, source=source, since_iso=self._since_iso(),
+            include_read=include_read, filter_pillar=pillar,
+        )
+
+    def outside_period_count(self, source="youtube"):
+        """Estado vazio: itens no último mês fora do período atual → 'ampliar'."""
+        import config
+        from datetime import datetime, timedelta, timezone
+
+        if config.get_period() == "month":
+            return 0
+        month_iso = (datetime.now(timezone.utc)
+                     - timedelta(hours=config.PERIODS["month"])).isoformat()
+        return store.count_outside_period(
+            self._since_iso(), month_iso, self.threshold, source=source)
+
+    def should_auto_refresh(self):
+        """Abrir o app já busca vídeos novos se a última busca foi há 2h+ —
+        só com canal conectado e chave configurada (sem abrir erro sozinho)."""
+        import config
+        import keystore
+        from datetime import datetime, timezone
+
+        try:
+            import accounts
+
+            if not accounts.status().get("active"):
+                return False
+        except Exception:
+            return False
+        env, _ = self._llm_env()
+        if not keystore.has(env):
+            return False
+        last = store.get_meta("last_run")
+        if not last:
+            return True
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(last)
+        except ValueError:
+            return True
+        return age.total_seconds() > config.AUTO_REFRESH_AFTER_HOURS * 3600
 
     # --- ações ---
     def save_obsidian(self, video_id):

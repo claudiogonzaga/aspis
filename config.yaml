@@ -18,6 +18,12 @@ pilares:
     descricao: "Pai presente e melhor: desenvolvimento infantil, disciplina positiva, equilíbrio."
     quero: ["psicologia do desenvolvimento", "atividades", "comunicação"]
     nao_quero: ["culpa parental", "comparação", "prescrições rígidas"]
+  aprendizado:
+    nome: "Curiosidade e aprendizado"
+    descricao: "Aprender algo de verdade fora dos outros pilares: ciência, história, tecnologia, como as coisas funcionam, ideias bem argumentadas."
+    quero: ["explicações claras", "especialistas", "conteúdo com fontes", "ensaios bem argumentados"]
+    nao_quero: ["listas de curiosidades rasas", "react sem conteúdo", "polêmica vazia"]
+    peso: 2
 
 # Vídeos abaixo deste score ficam ocultos da lista (mas contam no rodapé).
 score_threshold: 60
